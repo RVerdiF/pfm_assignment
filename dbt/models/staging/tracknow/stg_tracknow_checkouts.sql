@@ -37,12 +37,15 @@ normalized as (
 ),
 
 flagged as (
-    -- A NULL status (after normalization) is treated as not denied by the
-    -- standard SQL three-valued logic; coalesce keeps the flag strictly
-    -- boolean (NULL <> 'denied' -> NULL would otherwise flow through).
+    -- The flag is the card's exact expression: status <> 'denied'. Under SQL
+    -- three-valued logic a NULL normalized status (blank/whitespace-only in
+    -- the raw source) therefore yields a NULL flag: validity is UNKNOWN for
+    -- such rows. We deliberately do not coalesce it to false, which would
+    -- conflate 'denied' (known invalid) with 'no status' (unknown), and we do
+    -- not assume an absent status is valid.
     select
         *,
-        coalesce(status <> 'denied', false) as is_valid_conversion
+        status <> 'denied' as is_valid_conversion
     from normalized
 ),
 

@@ -37,6 +37,9 @@ models:
           raw string is trimmed and empty/whitespace-only values become NULL.
           is_valid_conversion is derived from this same normalized value, so a
           whitespace-padded ' denied ' normalizes to 'denied' and is not valid.
+          A NULL status (blank in source) is possible only as a data-quality
+          anomaly and yields a NULL is_valid_conversion flag (validity
+          unknown), never a boolean default.
         tests:
           - accepted_values:
               arguments:
@@ -60,9 +63,12 @@ models:
         description: Account size associated with the order (GBP).
       - name: is_valid_conversion
         description: >-
-          True when status <> 'denied', evaluated on the normalized status.
-          Denied rows remain available. Null (post-normalization) status is
-          treated as not denied; see the model for the coalesce semantics.
+          True when status <> 'denied', evaluated on the normalized status;
+          this is the card's expression verbatim. Denied rows remain available.
+          When the normalized status is NULL (blank/whitespace-only in source,
+          a data-quality anomaly), the flag is NULL under SQL three-valued
+          logic: validity is unknown and is never assumed true nor collapsed
+          into false. Downstream layers treat NULL as requiring review.
 
   - name: stg_posthog_sessions
     description: >
