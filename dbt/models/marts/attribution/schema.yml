@@ -1,0 +1,57 @@
+version: 2
+
+models:
+  - name: fct_revenue_attribution
+    description: >-
+      One row per VALID TrackNow conversion (grain: conversion_id). This is the
+      consumption model for revenue reporting: it carries the deterministic
+      attribution decision made by int_conversion_attribution together with the
+      matched PostHog session's UTM parameters, so Streamlit and downstream
+      tools can report revenue by channel or campaign without re-implementing
+      any attribution join. Only valid conversions enter this mart
+      (is_valid_conversion = true: denied conversions are excluded as a revenue
+      decision, refunded conversions are kept with status explicit). The
+      commission_gbp always equals the staging referral_bonus_gbp (the Data
+      Dictionary's correct per-order PFM commission metric).
+    columns:
+      - name: conversion_id
+        description: Unique TrackNow order identifier. One row per valid conversion.
+      - name: conversion_date
+        description: Date the conversion was created.
+      - name: firm_id
+        description: Synthetic identifier of the prop firm the order belongs to.
+      - name: status
+        description: >-
+          Normalized conversion status. Only 'active' and 'refunded' appear in
+          this mart ('denied' is excluded at the revenue layer).
+      - name: commission_gbp
+        description: >-
+          Actual PFM commission for the order in GBP (source referral_bonus_gbp,
+          surfaced through staging as commission_gbp).
+      - name: match_status
+        description: >-
+          Attribution decision carried from int_conversion_attribution:
+          'matched' | 'unmatched' | 'ambiguous'. Consumed directly by monitoring
+          and Streamlit.
+      - name: matched_session_id
+        description: >-
+          PostHog session id chosen by attribution for a 'matched' conversion;
+          NULL for unmatched/ambiguous conversions.
+      - name: matched_distinct_id
+        description: >-
+          PostHog anonymous user id (distinct_id) of the matched session; NULL
+          unless the conversion is matched.
+      - name: match_method
+        description: >-
+          How the exact match was made: 'gclid_exact' | 'fbclid_exact' |
+          'url_click_exact' for matched conversions; NULL otherwise. Derived
+          from the attribution identifier type, which is itself the result of
+          exact click-id equality only.
+      - name: utm_source
+        description: utm_source of the MATCHED session; NULL when not matched.
+      - name: utm_medium
+        description: utm_medium of the MATCHED session; NULL when not matched.
+      - name: utm_campaign
+        description: utm_campaign of the MATCHED session; NULL when not matched.
+      - name: utm_content
+        description: utm_content of the MATCHED session; NULL when not matched.
