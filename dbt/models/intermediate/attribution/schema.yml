@@ -1,0 +1,62 @@
+version: 2
+
+models:
+  - name: int_tracknow_attribution_candidates
+    description: >
+      One row per TrackNow conversion (grain: conversion_id). This model
+      prepares the TrackNow side of attribution WITHOUT deciding it: it carries
+      the identifiers that could link a conversion to a PostHog session plus
+      explicit presence flags. No identifier is treated as a join key here;
+      affiliate_session_id is never assumed to equal a PostHog session_id.
+    columns:
+      - name: conversion_id
+        description: Unique TrackNow order identifier (from staging). One row per conversion.
+        tests:
+          - not_null
+          - unique
+      - name: conversion_date
+        description: Date the conversion was created.
+      - name: click_id
+        description: >-
+          Affiliate click id passed at ad click time (staging-normalized, case
+          preserved). Null when absent; absence is part of the attribution
+          problem and does not fabricate a candidate.
+      - name: affiliate_session_id
+        description: >-
+          Session id assigned by TrackNow when the affiliate link was clicked.
+          Null when absent. NOT assumed to equal a PostHog session_id.
+      - name: tracknow_user_id
+        description: >-
+          TrackNow internal user id (staging-normalized). Null when absent.
+          Not used as a PostHog key without an explicit bridge.
+      - name: has_click_id
+        description: True when click_id is present after staging normalization.
+      - name: has_affiliate_session_id
+        description: True when affiliate_session_id is present after staging normalization.
+      - name: has_tracknow_user_id
+        description: True when tracknow_user_id is present after staging normalization.
+
+  - name: int_posthog_attribution_candidates
+    description: >
+      One row per existing PostHog click identifier value. Each session
+      contributes one candidate per identifier column that is present: gclid,
+      fbclid, and click_id_from_url (UNION ALL over the three columns). A
+      session with no identifier contributes no rows. Attribution is not
+      decided here: no exact match, priority, or fallback is applied.
+    columns:
+      - name: session_id
+        description: PostHog session that carried the identifier.
+        tests:
+          - not_null
+      - name: identifier_type
+        description: >-
+          Which column the candidate came from: gclid, fbclid, or
+          click_id_from_url.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['gclid', 'fbclid', 'click_id_from_url']
+      - name: identifier_value
+        description: The click identifier value itself (case preserved).
+        tests:
+          - not_null
