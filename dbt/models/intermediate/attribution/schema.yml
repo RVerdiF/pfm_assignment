@@ -1,0 +1,196 @@
+version: 2
+
+models:
+  - name: int_tracknow_attribution_candidates
+    description: >
+      One row per TrackNow conversion (grain: conversion_id). This model
+      prepares the TrackNow side of attribution WITHOUT deciding it: it carries
+      the identifiers that could link a conversion to a PostHog session plus
+      explicit presence flags. No identifier is treated as a join key here;
+      affiliate_session_id is never assumed to equal a PostHog session_id.
+    columns:
+      - name: conversion_id
+        description: Unique TrackNow order identifier (from staging). One row per conversion.
+        tests:
+          - not_null
+          - unique
+      - name: conversion_date
+        description: Date the conversion was created.
+      - name: click_id
+        description: >-
+          Affiliate click id passed at ad click time (staging-normalized, case
+          preserved). Null when absent; absence is part of the attribution
+          problem and does not fabricate a candidate.
+      - name: affiliate_session_id
+        description: >-
+          Session id assigned by TrackNow when the affiliate link was clicked.
+          Null when absent. NOT assumed to equal a PostHog session_id.
+      - name: tracknow_user_id
+        description: >-
+          TrackNow internal user id (staging-normalized). Null when absent.
+          Not used as a PostHog key without an explicit bridge.
+      - name: has_click_id
+        description: True when click_id is present after staging normalization.
+      - name: has_affiliate_session_id
+        description: True when affiliate_session_id is present after staging normalization.
+      - name: has_tracknow_user_id
+        description: True when tracknow_user_id is present after staging normalization.
+
+  - name: int_posthog_attribution_candidates
+    description: >
+      One row per existing PostHog click identifier value. Each session
+      contributes one candidate per identifier column that is present: gclid,
+      fbclid, and click_id_from_url (UNION ALL over the three columns). A
+      session with no identifier contributes no rows. Attribution is not
+      decided here: no exact match, priority, or fallback is applied.
+    columns:
+      - name: session_id
+        description: PostHog session that carried the identifier.
+        tests:
+          - not_null
+      - name: identifier_type
+        description: >-
+          Which column the candidate came from: gclid, fbclid, or
+          click_id_from_url.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['gclid', 'fbclid', 'click_id_from_url']
+      - name: identifier_value
+        description: The click identifier value itself (case preserved).
+        tests:
+          - not_null
+
+  - name: int_conversion_attribution
+    description: >
+      One row per TrackNow conversion (grain: conversion_id) with a fully
+      deterministic attribution decision. A conversion is attributed only via
+      an EXACT equality between its click_id and a PostHog click identifier
+      value (gclid, fbclid, or click_id_from_url) from
+      int_posthog_attribution_candidates. Eligibility window:
+      session_date <= conversion_date (TrackNow exposes only a date, so no
+      conversion time is invented). Typed identifiers (gclid/fbclid) outrank
+      the generic click_id_from_url; among the winning type the most recent
+      session (largest session_start_at) is chosen. A conversion with exactly
+      one finalist is 'matched'; more than one finalist ties for first is
+      'ambiguous'; no eligible exact match is 'unmatched'. The
+      attribution_session_* columns are populated only for 'matched' rows.
+      No fuzzy matching, no affiliate_session_id = session_id bridge, no
+      invented conversion time.
+    columns:
+      - name: conversion_id
+        description: Unique TrackNow order identifier. One row per conversion.
+        tests:
+          - not_null
+          - unique
+      - name: conversion_date
+        description: Date the conversion was created.
+      - name: click_id
+        description: >-
+          Affiliate click id used for matching (staging-normalized). Null when
+          absent; a conversion without a click id is never attributed.
+      - name: affiliate_session_id
+        description: >-
+          TrackNow-side session id. Carried for audit only; NOT used as a join
+          key to PostHog.
+      - name: tracknow_user_id
+        description: TrackNow internal user id. Carried for audit only.
+      - name: has_click_id
+        description: True when click_id is present.
+      - name: has_affiliate_session_id
+        description: True when affiliate_session_id is present.
+      - name: has_tracknow_user_id
+        description: True when tracknow_user_id is present.
+      - name: attribution_status
+        description: >
+          Decision status: 'matched' (exactly one eligible session),
+          'ambiguous' (more than one eligible session ties for first),
+          'unmatched' (no eligible exact match). Unmatched/ambiguous rows are
+          consumed by int_unmatched_conversions; ambiguous rows carry no
+          attributed session (no deterministic winner).
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['matched', 'ambiguous', 'unmatched']
+          - not_null
+      - name: attribution_session_id
+        description: PostHog session chosen for a 'matched' conversion; NULL otherwise.
+      - name: attribution_session_date
+        description: Date of the chosen session for a 'matched' conversion; NULL otherwise.
+      - name: attribution_session_start_at
+        description: Start time of the chosen session for a 'matched' conversion; NULL otherwise.
+      - name: attribution_identifier_type
+        description: >-
+          Identifier type that produced the match (gclid, fbclid, or
+          click_id_from_url) for a 'matched' conversion; NULL otherwise.
+
+  - name: int_unmatched_conversions
+    description: >-
+      Diagnostic dataset: one row per conversion whose attribution decision is
+      not 'matched' ('unmatched' or 'ambiguous'), explaining WHY via a
+      deterministic unmatched_reason. The model is a strict filtered projection
+      of int_conversion_attribution (no fan-out), so its row count always
+      reconciles with the parent. It never re-decides attribution: the
+      explanation uses only the same exact click_id equality and
+      session_date <= conversion_date eligibility window that the attribution
+      model already applied. Materialized as a view so the diagnosis always
+      reflects the latest attribution table.
+    columns:
+      - name: conversion_id
+        description: >-
+          Unique TrackNow order identifier of the non-matched conversion. One
+          row per conversion whose attribution_status is not 'matched'.
+        tests:
+          - not_null
+          - unique
+      - name: conversion_date
+        description: Date the conversion was created.
+      - name: click_id
+        description: >-
+          Affiliate click id used for exact matching (staging-normalized).
+          Null when absent; its absence is the missing_click_id reason.
+      - name: affiliate_session_id
+        description: >-
+          TrackNow-side session id, carried for audit only. Never used as a
+          join key to PostHog.
+      - name: tracknow_user_id
+        description: >-
+          TrackNow internal user id, carried for audit only. Never used as a
+          PostHog key.
+      - name: has_click_id
+        description: True when click_id is present.
+      - name: has_affiliate_session_id
+        description: True when affiliate_session_id is present.
+      - name: has_tracknow_user_id
+        description: True when tracknow_user_id is present.
+      - name: attribution_status
+        description: >-
+          The parent decision being explained: 'unmatched' (no eligible exact
+          match) or 'ambiguous' (more than one eligible session tied for
+          first). Never 'matched' by construction.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unmatched', 'ambiguous']
+          - not_null
+      - name: unmatched_reason
+        description: >-
+          Deterministic diagnosis of why this conversion was not matched:
+          'missing_click_id' (no click_id, so exact matching is impossible),
+          'multiple_candidates' (ambiguous: several eligible sessions tied for
+          first), 'outside_posthog_sample_window' (the PostHog sample holds no
+          session on or before the conversion date carrying its click_id - the
+          conversion predates the sample or only later sessions carry the id),
+          'click_id_not_found' (no exact identifier value match anywhere in the
+          sample while the date falls inside the sample window), or 'unknown'
+          (residual: exact matches exist but none has a usable session_date).
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 'missing_click_id'
+                  - 'outside_posthog_sample_window'
+                  - 'multiple_candidates'
+                  - 'click_id_not_found'
+                  - 'unknown'
+          - not_null
