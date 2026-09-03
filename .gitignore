@@ -1,0 +1,7 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# DuckDB local warehouse (gerado por ingestion/load_excel.py)
+warehouse/*.duckdb
+warehouse/*.duckdb.wal
