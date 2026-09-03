@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: fct_commission_daily_local
+    description: >-
+      One row per (conversion_date, firm_id) - LOCAL daily commission proxy over
+      the TrackNow sample. This model deliberately does NOT use the name
+      f_commission_daily: per the assignment schema, analytics_core
+      f_commission_daily is the authoritative daily-commission source (a Google
+      Sheet) that was not provided. This mart exists only to demonstrate the
+      per-conversion pipeline (commission_gbp = referral_bonus_gbp) and must not
+      be presented as the authoritative commission source. Only valid
+      conversions are aggregated (denied excluded; refunded kept).
+    columns:
+      - name: conversion_date
+        description: Date the conversions were created (grain part 1).
+      - name: firm_id
+        description: Synthetic prop-firm identifier (grain part 2).
+      - name: conversion_count
+        description: Number of valid conversions for that firm on that date.
+      - name: commission_gbp
+        description: Sum of referral_bonus_gbp across the group's valid conversions.
+      - name: sales_amount_gbp
+        description: Sum of order price (GBP) across the group's valid conversions.
+
+  - name: mart_attribution_health
+    description: >-
+      One row per (conversion_date, utm_source) - attribution health/monitoring
+      mart. Counts every conversion the attribution engine decided over
+      (int_conversion_attribution, which preserves denied conversions too:
+      health monitors the attribution machinery itself, so it counts the full
+      decided population rather than the revenue-valid subset). The utm_source
+      dimension comes from the matched session only; unmatched/ambiguous
+      conversions have no attributed session and roll into the NULL utm_source
+      group. This is the primary source for the Streamlit monitoring section.
+    columns:
+      - name: conversion_date
+        description: Date of the conversions in this group (grain part 1).
+      - name: utm_source
+        description: >-
+          utm_source of the matched session (grain part 2). NULL groups
+          conversions that were not deterministically attributed to any session.
+      - name: total_conversions
+        description: Conversions decided on this date/utm_source group.
+      - name: matched_conversions
+        description: Conversions whose attribution_status is 'matched'.
+      - name: unmatched_conversions
+        description: Conversions whose attribution_status is 'unmatched'.
+      - name: ambiguous_conversions
+        description: Conversions whose attribution_status is 'ambiguous'.
+      - name: match_rate
+        description: matched_conversions / total_conversions (0..1; NULL on empty groups).
+      - name: unmatched_rate
+        description: unmatched_conversions / total_conversions (0..1; NULL on empty groups).
+      - name: gclid_exact_matches
+        description: Matched conversions attributed through an exact gclid equality.
+      - name: fbclid_exact_matches
+        description: Matched conversions attributed through an exact fbclid equality.
+      - name: url_click_exact_matches
+        description: Matched conversions attributed through an exact click_id_from_url equality.
