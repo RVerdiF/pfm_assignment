@@ -8,7 +8,11 @@ models:
       audit; is_valid_conversion = status <> 'denied'.
     columns:
       - name: conversion_id
-        description: Unique TrackNow order identifier (source tracknow_order_id).
+        description: >-
+          Unique TrackNow order identifier (source tracknow_order_id). The raw
+          string is trimmed and empty/whitespace-only values become NULL, so the
+          cleaned key never carries padding; NULL keys are rejected by the
+          not_null test below.
         tests:
           - not_null
           - unique
@@ -27,9 +31,12 @@ models:
       - name: firm_id
         description: Synthetic identifier of the prop firm.
       - name: status
-        description: >
+        description: >-
           Conversion status: 'active' (valid), 'refunded' (returned), 'denied'
-          (invalid). Denied orders are preserved for audit in this layer.
+          (invalid). Denied orders are preserved for audit in this layer. The
+          raw string is trimmed and empty/whitespace-only values become NULL.
+          is_valid_conversion is derived from this same normalized value, so a
+          whitespace-padded ' denied ' normalizes to 'denied' and is not valid.
         tests:
           - accepted_values:
               arguments:
@@ -52,7 +59,10 @@ models:
       - name: account_size
         description: Account size associated with the order (GBP).
       - name: is_valid_conversion
-        description: True when status <> 'denied'. Denied rows remain available.
+        description: >-
+          True when status <> 'denied', evaluated on the normalized status.
+          Denied rows remain available. Null (post-normalization) status is
+          treated as not denied; see the model for the coalesce semantics.
 
   - name: stg_posthog_sessions
     description: >
@@ -61,7 +71,10 @@ models:
       happened inside the session; no attribution is performed here.
     columns:
       - name: session_id
-        description: Unique session identifier.
+        description: >-
+          Unique session identifier. The raw string is trimmed and
+          empty/whitespace-only values become NULL, so the cleaned key never
+          carries padding; NULL keys are rejected by the not_null test below.
         tests:
           - not_null
           - unique

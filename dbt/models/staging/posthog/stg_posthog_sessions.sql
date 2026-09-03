@@ -7,34 +7,16 @@ with source as (
     select * from {{ source('raw', 'posthog_sessions') }}
 ),
 
-renamed as (
-    select
-        posthog_distinct_id as distinct_id,
-        session_id,
-        session_date,
-        session_start_at,
-        session_duration_seconds,
-        click_id_from_url,
-        gclid,
-        fbclid,
-        utm_source,
-        utm_medium,
-        utm_campaign,
-        utm_content,
-        country_code,
-        session_entry_pathname,
-        has_checkout_started,
-        has_tracknow_conversion,
-        events_in_session
-    from source
-),
-
 cleaned as (
     select
         -- identifiers and marketing params: trim then empty string -> NULL;
         -- case is preserved (click IDs can be case-sensitive).
-        nullif(trim(distinct_id), '') as distinct_id,
-        session_id,
+        nullif(trim(posthog_distinct_id), '') as distinct_id,
+        -- session_id is the declared grain key; trim it like every other
+        -- string key so the cleaned interface never exposes whitespace
+        -- padding, and whitespace-only values become NULL (which the
+        -- not_null + unique schema tests would then catch).
+        nullif(trim(session_id), '') as session_id,
         cast(session_date as date) as session_date,
         -- Raw values are UTC (+00:00); cast to timestamptz keeps the timezone.
         cast(session_start_at as timestamptz) as session_start_at,
@@ -51,7 +33,7 @@ cleaned as (
         cast(has_checkout_started as boolean) as has_checkout_started,
         cast(has_tracknow_conversion as boolean) as has_tracknow_conversion,
         events_in_session
-    from renamed
+    from source
 )
 
 select * from cleaned
