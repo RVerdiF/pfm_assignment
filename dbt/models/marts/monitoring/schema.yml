@@ -14,14 +14,24 @@ models:
     columns:
       - name: conversion_date
         description: Date the conversions were created (grain part 1).
+        tests:
+          - not_null
       - name: firm_id
         description: Synthetic prop-firm identifier (grain part 2).
+        tests:
+          - not_null
       - name: conversion_count
         description: Number of valid conversions for that firm on that date.
+        tests:
+          - not_null
       - name: commission_gbp
         description: Sum of referral_bonus_gbp across the group's valid conversions.
+        tests:
+          - not_null
       - name: sales_amount_gbp
         description: Sum of order price (GBP) across the group's valid conversions.
+        tests:
+          - not_null
 
   - name: mart_attribution_health
     description: >-
@@ -36,25 +46,41 @@ models:
     columns:
       - name: conversion_date
         description: Date of the conversions in this group (grain part 1).
+        tests:
+          - not_null
       - name: utm_source
         description: >-
           utm_source of the matched session (grain part 2). NULL groups
           conversions that were not deterministically attributed to any session.
       - name: total_conversions
         description: Conversions decided on this date/utm_source group.
+        tests:
+          - not_null
       - name: matched_conversions
         description: Conversions whose attribution_status is 'matched'.
+        tests:
+          - not_null
       - name: unmatched_conversions
         description: Conversions whose attribution_status is 'unmatched'.
+        tests:
+          - not_null
       - name: ambiguous_conversions
         description: Conversions whose attribution_status is 'ambiguous'.
+        tests:
+          - not_null
       - name: match_rate
         description: matched_conversions / total_conversions (0..1; NULL on empty groups).
       - name: unmatched_rate
         description: unmatched_conversions / total_conversions (0..1; NULL on empty groups).
       - name: gclid_exact_matches
         description: Matched conversions attributed through an exact gclid equality.
+        tests:
+          - not_null
       - name: fbclid_exact_matches
         description: Matched conversions attributed through an exact fbclid equality.
+        tests:
+          - not_null
       - name: url_click_exact_matches
         description: Matched conversions attributed through an exact click_id_from_url equality.
+        tests:
+          - not_null
