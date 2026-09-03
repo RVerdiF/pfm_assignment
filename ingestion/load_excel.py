@@ -1,9 +1,15 @@
-"""Step 1 - Excel -> DuckDB raw ingestion.
+"""Step 1 - Excel -> DuckDB raw ingestion (Polars).
 
 Reads analytical sheets from an .xlsx file and persists each one as a table in
 the `raw` schema of a local DuckDB database. The only transformation applied is
 normalizing column names to snake_case; values, nulls, and identifiers are
 preserved intact.
+
+Polars is used as the ingestion library: sheets are read with
+`polars.read_excel(..., drop_empty_rows=False)` and registered into DuckDB.
+`drop_empty_rows=False` keeps fully null rows that live inside a worksheet's
+extent, matching the extent contract of the source workbook (no records are
+filtered during ingestion).
 """
 from __future__ import annotations
 
@@ -11,7 +17,7 @@ import re
 from pathlib import Path
 
 import duckdb
-import pandas as pd
+import polars as pl
 
 # Mapping: sheet name -> target table in the raw schema.
 SHEET_TO_TABLE = {
@@ -45,15 +51,27 @@ def sheet_to_table(sheet_name: str) -> str:
         raise ValueError(f"Sheet not mapped for ingestion: {sheet_name!r}") from None
 
 
-def _read_sheet(excel_path: str, sheet_name: str) -> pd.DataFrame:
+def _read_sheet(excel_path: str, sheet_name: str) -> pl.DataFrame:
     """Read an Excel sheet and normalize column names to snake_case.
 
-    The extent read by pandas.read_excel is the source contract: no rows are
+    The extent read by polars.read_excel is the source contract: no rows are
     filtered - including completely null rows that exist within the spreadsheet.
+    ``drop_empty_rows=False`` preserves such interior fully-null rows instead of
+    collapsing them like the calamine default would.
     """
-    df = pd.read_excel(excel_path, sheet_name=sheet_name)
-    df.columns = [to_snake_case(str(c)) for c in df.columns]
+    df = pl.read_excel(excel_path, sheet_name=sheet_name, drop_empty_rows=False)
+    df = df.rename({c: to_snake_case(str(c)) for c in df.columns})
     return df
+
+
+def _dataframe_to_duckdb(con: duckdb.DuckDBPyConnection, table_name: str, df: pl.DataFrame) -> None:
+    """Create/replace `raw.<table_name>` from a Polars DataFrame."""
+    con.register("df_view", df.to_arrow())
+    try:
+        con.execute(f"DROP TABLE IF EXISTS raw.{table_name}")
+        con.execute(f"CREATE TABLE raw.{table_name} AS SELECT * FROM df_view")
+    finally:
+        con.unregister("df_view")
 
 
 def load_excel_into_duckdb(excel_path: str, duckdb_path: str) -> list[str]:
@@ -70,10 +88,7 @@ def load_excel_into_duckdb(excel_path: str, duckdb_path: str) -> list[str]:
         created = []
         for sheet_name, table_name in SHEET_TO_TABLE.items():
             df = _read_sheet(excel_path, sheet_name)
-            con.register("df_view", df)
-            con.execute(f"DROP TABLE IF EXISTS raw.{table_name}")
-            con.execute(f"CREATE TABLE raw.{table_name} AS SELECT * FROM df_view")
-            con.unregister("df_view")
+            _dataframe_to_duckdb(con, table_name, df)
             created.append(table_name)
         return created
     finally:
@@ -84,11 +99,10 @@ def _excel_expected(excel_path: str) -> dict[str, dict]:
     """Return actual count of rows/columns and column names per sheet (Excel reference)."""
     expected = {}
     for sheet_name, table_name in SHEET_TO_TABLE.items():
-        df = pd.read_excel(excel_path, sheet_name=sheet_name)
-        df.columns = [to_snake_case(str(c)) for c in df.columns]
+        df = _read_sheet(excel_path, sheet_name)
         expected[table_name] = {
-            "rows": len(df),
-            "cols": len(df.columns),
+            "rows": df.height,
+            "cols": df.width,
             "columns": list(df.columns),
         }
     return expected
