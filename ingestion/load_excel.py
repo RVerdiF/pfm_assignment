@@ -46,11 +46,13 @@ def sheet_to_table(sheet_name: str) -> str:
 
 
 def _read_sheet(excel_path: str, sheet_name: str) -> pd.DataFrame:
-    """Lê uma aba, aplica snake_case nos nomes das colunas e remove apenas
-    linhas de rodapé totalmente vazias (não contam como registros)."""
+    """Lê uma aba e aplica snake_case nos nomes das colunas.
+
+    O extent lido pelo pandas.read_excel é o contrato da fonte: nenhuma linha é
+    filtrada — inclusive linhas totalmente nulas que existam dentro da planilha.
+    """
     df = pd.read_excel(excel_path, sheet_name=sheet_name)
     df.columns = [to_snake_case(str(c)) for c in df.columns]
-    df = df.dropna(how="all")
     return df
 
 
@@ -81,7 +83,6 @@ def _excel_expected(excel_path: str) -> dict[str, dict]:
     expected = {}
     for sheet_name, table_name in SHEET_TO_TABLE.items():
         df = pd.read_excel(excel_path, sheet_name=sheet_name)
-        df = df.dropna(how="all")
         df.columns = [to_snake_case(str(c)) for c in df.columns]
         expected[table_name] = {
             "rows": len(df),

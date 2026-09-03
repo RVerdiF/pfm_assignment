@@ -3,8 +3,8 @@
 Foco comportamental:
 - to_snake_case normaliza nomes de colunas sem quebrar os já snake_case.
 - sheet_to_table mapeia aba -> nome de tabela (tracknow_checkouts / posthog_sessions).
-- load_excel_into_duckdb grava schema raw + tabelas, sem registrar linhas vazias
-  do rodapé e sem filtrar/deduplicar registros reais.
+- load_excel_into_duckdb grava schema raw + tabelas, sem filtrar/deduplicar
+  registros reais (inclusive linhas totalmente nulas presentes no extent).
 - validate reconhece reconciliação de linhas/colunas/nomes.
 """
 import os
@@ -53,25 +53,38 @@ def test_sheet_to_table_maps_target_sheets():
 # ---------------------------------------------------------------------------
 
 def _write_fixture_xlsx(path):
+    """Cria abas com registros reais e uma linha totalmente nula NO MEIO do
+    extent (linha absoluta 4 sem células) — representa um registro presente na
+    planilha que a ingestão deve preservar, não um rodapé fora da área de dados."""
     wb = openpyxl.Workbook()
     ws1 = wb.active
     ws1.title = "Sample TrackNow Checkouts"
-    ws1.append(["Click ID", "Order Price (GBP)"])
-    ws1.append(["id-aaaa", 66.97])
-    ws1.append(["id-bbbb", None])
-    # rodapé vazio (linhas em branco até a 10) — não são registros
-    for _ in range(8):
-        ws1.append([])
+    _write_rows_at(ws1, {
+        1: ["Click ID", "Order Price (GBP)"],   # header
+        2: ["id-aaaa", 66.97],
+        3: ["id-bbbb", None],
+        # row 4: fully-null interior row (no cells written)
+        5: ["id-cccc", 1.0],
+    })
 
     ws2 = wb.create_sheet("Sample PostHog Sessions")
-    ws2.append(["Session ID", "click_id_from_url", "utm_source"])
-    ws2.append(["sess-1", "click-1", "google"])
-    ws2.append(["sess-2", None, "facebook"])
-    ws2.append(["sess-3", "click-3", None])
-    for _ in range(7):
-        ws2.append([])
+    _write_rows_at(ws2, {
+        1: ["Session ID", "click_id_from_url", "utm_source"],  # header
+        2: ["sess-1", "click-1", "google"],
+        3: ["sess-2", None, "facebook"],
+        # row 4: fully-null interior row (no cells written)
+        5: ["sess-3", "click-3", None],
+    })
 
     wb.save(path)
+
+
+def _write_rows_at(ws, rows):
+    """Escreve valores nas linhas absolutas dadas (não estende a dimensão em
+    linhas sem células)."""
+    for r_i, values in rows.items():
+        for c_i, val in enumerate(values, start=1):
+            ws.cell(row=r_i, column=c_i).value = val
 
 
 @pytest.fixture()
@@ -101,7 +114,9 @@ def test_load_creates_raw_tables(fixture_xlsx, duckdb_path):
         con.close()
 
 
-def test_load_row_counts_exclude_only_empty_footer(fixture_xlsx, duckdb_path):
+def test_load_row_counts(fixture_xlsx, duckdb_path):
+    """Contagens correspondem exatamente ao extent lido do Excel (header +
+    registros reais + a linha totalmente nula interior): 4 linhas por aba."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:
@@ -113,9 +128,9 @@ def test_load_row_counts_exclude_only_empty_footer(fixture_xlsx, duckdb_path):
         ).fetchone()[0]
     finally:
         con.close()
-    # registros reais preservados; rodapé em branco não entra
-    assert n_tracknow == 2
-    assert n_posthog == 3
+    # 3 registros reais + 1 linha totalmente nula (interior do extent)
+    assert n_tracknow == 4
+    assert n_posthog == 4
 
 
 def test_load_applies_snake_case_to_columns(fixture_xlsx, duckdb_path):
@@ -131,6 +146,8 @@ def test_load_applies_snake_case_to_columns(fixture_xlsx, duckdb_path):
 
 
 def test_load_preserves_identifier_values(fixture_xlsx, duckdb_path):
+    """Identificadores reais preservados; a linha totalmente nula NÃO é
+    interpretada como fim da tabela — registros posteriores a ela existem."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:
@@ -138,20 +155,40 @@ def test_load_preserves_identifier_values(fixture_xlsx, duckdb_path):
             "SELECT click_id FROM raw.tracknow_checkouts WHERE click_id IS NOT NULL ORDER BY click_id"
         ).fetchall()
         sessions = con.execute(
-            "SELECT session_id FROM raw.posthog_sessions ORDER BY session_id"
+            "SELECT session_id FROM raw.posthog_sessions WHERE session_id IS NOT NULL ORDER BY session_id"
         ).fetchall()
     finally:
         con.close()
-    assert [r[0] for r in ids] == ["id-aaaa", "id-bbbb"]
+    assert [r[0] for r in ids] == ["id-aaaa", "id-bbbb", "id-cccc"]
     assert [r[0] for r in sessions] == ["sess-1", "sess-2", "sess-3"]
+
+
+def test_load_retains_fully_null_interior_rows(fixture_xlsx, duckdb_path):
+    """Uma linha totalmente nula dentro do extent da planilha é um registro e
+    não pode ser filtrada — nenhum filtro de dados é aplicado na ingestão."""
+    le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
+    con = duckdb.connect(duckdb_path)
+    try:
+        nulls = con.execute(
+            "SELECT count(*) FROM raw.tracknow_checkouts "
+            "WHERE click_id IS NULL AND order_price_gbp IS NULL"
+        ).fetchone()[0]
+        nulls_s = con.execute(
+            "SELECT count(*) FROM raw.posthog_sessions "
+            "WHERE session_id IS NULL AND click_id_from_url IS NULL AND utm_source IS NULL"
+        ).fetchone()[0]
+    finally:
+        con.close()
+    assert nulls == 1
+    assert nulls_s == 1
 
 
 def test_validate_reconciles_ok(fixture_xlsx, duckdb_path):
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     report = le.validate(excel_path=fixture_xlsx, duckdb_path=duckdb_path)
     assert report["all_ok"] is True
-    assert report["tables"]["tracknow_checkouts"]["rows"] == 2
+    assert report["tables"]["tracknow_checkouts"]["rows"] == 4
     assert report["tables"]["tracknow_checkouts"]["cols"] == 2
-    assert report["tables"]["posthog_sessions"]["rows"] == 3
+    assert report["tables"]["posthog_sessions"]["rows"] == 4
     assert report["tables"]["posthog_sessions"]["cols"] == 3
     assert set(report["tables"]["tracknow_checkouts"]["columns"]) == {"click_id", "order_price_gbp"}
