@@ -5,12 +5,14 @@ Behavioral focus:
 - sheet_to_table maps sheet -> table name (tracknow_checkouts / posthog_sessions).
 - load_excel_into_duckdb persists the raw schema + tables, without filtering/deduplicating
   real records (including fully null rows present in the extent).
+- _read_sheet reads with Polars and retains fully null interior rows.
 - validate performs reconciliation of rows/columns/names.
 """
 import os
 
 import duckdb
 import openpyxl
+import polars as pl
 import pytest
 
 from ingestion import load_excel as le
@@ -181,6 +183,17 @@ def test_load_retains_fully_null_interior_rows(fixture_xlsx, duckdb_path):
         con.close()
     assert nulls == 1
     assert nulls_s == 1
+
+
+def test_read_sheet_returns_polars_and_retains_null_rows(fixture_xlsx):
+    """_read_sheet reads through Polars and keeps fully null interior rows
+    (drop_empty_rows=False), so the DuckDB extent matches the source workbook."""
+    df = le._read_sheet(fixture_xlsx, "Sample TrackNow Checkouts")
+    assert isinstance(df, pl.DataFrame)
+    assert df.height == 4
+    assert df.columns == ["click_id", "order_price_gbp"]
+    # The interior fully null row is present as a row of all nulls.
+    assert df.filter(pl.col("click_id").is_null()).height == 1
 
 
 def test_validate_reconciles_ok(fixture_xlsx, duckdb_path):
