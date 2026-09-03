@@ -1,0 +1,88 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: >
+      Raw landing tables in the DuckDB warehouse, created from the assignment
+      workbook (data/source.xlsx) by ingestion/load_excel.py. Values, nulls and
+      identifiers are preserved as ingested; the only transformation applied at
+      load time is normalizing column names to snake_case. Column semantics are
+      documented per the workbook tabs "Key Table Schemas" and
+      "Data Dictionary". No business logic is applied in this layer.
+    tables:
+      - name: tracknow_checkouts
+        description: >
+          One row per TrackNow checkout order (sample: 100 rows). Grain:
+          tracknow_order_id. Status values: 'active' (valid), 'refunded'
+          (returned), 'denied' (invalid - always excluded downstream). Order and
+          commission amounts are in GBP.
+        columns:
+          - name: tracknow_order_id
+            description: Unique identifier for each TrackNow conversion order.
+            tests:
+              - not_null
+              - unique
+          - name: click_id
+            description: >
+              The affiliate click ID passed at ad click time - the key to
+              linking an ad click to a purchase. Not always populated; absence
+              is part of the attribution problem and is not a data error.
+          - name: affiliate_session_id
+            description: >
+              Session ID assigned by TrackNow when the user clicked the
+              affiliate link. Not always populated.
+          - name: firm_id
+            description: Synthetic identifier for the prop firm.
+          - name: referral_bonus_gbp
+            description: >
+              Actual PFM commission per order (GBP). This is the correct
+              commission metric.
+          - name: status
+            description: >
+              'active' = valid | 'refunded' = returned | 'denied' = invalid
+              (always excluded downstream).
+          - name: tracknow_user_id
+            description: >
+              TrackNow internal user ID. Not always populated; absence is part
+              of the attribution problem.
+
+      - name: posthog_sessions
+        description: >
+          One row per PostHog web session (sample: 200 rows). Grain:
+          session_id. Session-level flags (has_checkout_started,
+          has_tracknow_conversion) describe what happened inside the session;
+          cross-session purchases are not captured in this sample.
+        columns:
+          - name: session_id
+            description: Unique session identifier.
+            tests:
+              - not_null
+              - unique
+          - name: posthog_distinct_id
+            description: >
+              Anonymous PostHog user identifier - cookie-based, resets on a new
+              device / incognito.
+          - name: click_id_from_url
+            description: >
+              The raw click ID extracted from the landing URL (gclid or fbclid).
+          - name: fbclid
+            description: >
+              Facebook/Meta click ID - present when the user arrived from a Meta
+              ad. Absence is not a data error.
+          - name: gclid
+            description: >
+              Google click ID - present when the user arrived from a Google ad.
+              Absence is not a data error.
+          - name: utm_content
+            description: >
+              UTM content parameter; for Meta paid sessions this field carries
+              the ad_id, enabling creative-level attribution.
+          - name: has_tracknow_conversion
+            description: >
+              1 if a TrackNow purchase event was fired in this session, else 0.
+              Session-level only - cross-session purchases are NOT captured.
+          - name: session_entry_pathname
+            description: >
+              URL path the user first landed on in this session (e.g.
+              /prop-firms/apex-trader-funding).
