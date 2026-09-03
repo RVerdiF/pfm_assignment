@@ -16,23 +16,40 @@ models:
     columns:
       - name: conversion_id
         description: Unique TrackNow order identifier. One row per valid conversion.
+        tests:
+          - not_null
+          - unique
       - name: conversion_date
         description: Date the conversion was created.
+        tests:
+          - not_null
       - name: firm_id
         description: Synthetic identifier of the prop firm the order belongs to.
+        tests:
+          - not_null
       - name: status
         description: >-
           Normalized conversion status. Only 'active' and 'refunded' appear in
           this mart ('denied' is excluded at the revenue layer).
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['active', 'refunded']
       - name: commission_gbp
         description: >-
           Actual PFM commission for the order in GBP (source referral_bonus_gbp,
           surfaced through staging as commission_gbp).
+        tests:
+          - not_null
       - name: match_status
         description: >-
           Attribution decision carried from int_conversion_attribution:
           'matched' | 'unmatched' | 'ambiguous'. Consumed directly by monitoring
           and Streamlit.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['matched', 'unmatched', 'ambiguous']
       - name: matched_session_id
         description: >-
           PostHog session id chosen by attribution for a 'matched' conversion;
