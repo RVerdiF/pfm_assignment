@@ -123,3 +123,74 @@ models:
         description: >-
           Identifier type that produced the match (gclid, fbclid, or
           click_id_from_url) for a 'matched' conversion; NULL otherwise.
+
+  - name: int_unmatched_conversions
+    description: >-
+      Diagnostic dataset: one row per conversion whose attribution decision is
+      not 'matched' ('unmatched' or 'ambiguous'), explaining WHY via a
+      deterministic unmatched_reason. The model is a strict filtered projection
+      of int_conversion_attribution (no fan-out), so its row count always
+      reconciles with the parent. It never re-decides attribution: the
+      explanation uses only the same exact click_id equality and
+      session_date <= conversion_date eligibility window that the attribution
+      model already applied. Materialized as a view so the diagnosis always
+      reflects the latest attribution table.
+    columns:
+      - name: conversion_id
+        description: >-
+          Unique TrackNow order identifier of the non-matched conversion. One
+          row per conversion whose attribution_status is not 'matched'.
+        tests:
+          - not_null
+          - unique
+      - name: conversion_date
+        description: Date the conversion was created.
+      - name: click_id
+        description: >-
+          Affiliate click id used for exact matching (staging-normalized).
+          Null when absent; its absence is the missing_click_id reason.
+      - name: affiliate_session_id
+        description: >-
+          TrackNow-side session id, carried for audit only. Never used as a
+          join key to PostHog.
+      - name: tracknow_user_id
+        description: >-
+          TrackNow internal user id, carried for audit only. Never used as a
+          PostHog key.
+      - name: has_click_id
+        description: True when click_id is present.
+      - name: has_affiliate_session_id
+        description: True when affiliate_session_id is present.
+      - name: has_tracknow_user_id
+        description: True when tracknow_user_id is present.
+      - name: attribution_status
+        description: >-
+          The parent decision being explained: 'unmatched' (no eligible exact
+          match) or 'ambiguous' (more than one eligible session tied for
+          first). Never 'matched' by construction.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['unmatched', 'ambiguous']
+          - not_null
+      - name: unmatched_reason
+        description: >-
+          Deterministic diagnosis of why this conversion was not matched:
+          'missing_click_id' (no click_id, so exact matching is impossible),
+          'multiple_candidates' (ambiguous: several eligible sessions tied for
+          first), 'outside_posthog_sample_window' (the PostHog sample holds no
+          session on or before the conversion date carrying its click_id - the
+          conversion predates the sample or only later sessions carry the id),
+          'click_id_not_found' (no exact identifier value match anywhere in the
+          sample while the date falls inside the sample window), or 'unknown'
+          (residual: exact matches exist but none has a usable session_date).
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 'missing_click_id'
+                  - 'outside_posthog_sample_window'
+                  - 'multiple_candidates'
+                  - 'click_id_not_found'
+                  - 'unknown'
+          - not_null
