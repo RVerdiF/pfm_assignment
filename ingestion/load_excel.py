@@ -1,9 +1,9 @@
-"""Etapa 1 — Ingestão Excel -> DuckDB raw.
+"""Step 1 - Excel -> DuckDB raw ingestion.
 
-Lê as abas analíticas de um arquivo .xlsx e persiste cada uma como tabela no
-schema `raw` de um DuckDB local. A única transformação aplicada é a
-normalização dos nomes de colunas para snake_case; valores, nulos e
-identificadores são preservados intactos.
+Reads analytical sheets from an .xlsx file and persists each one as a table in
+the `raw` schema of a local DuckDB database. The only transformation applied is
+normalizing column names to snake_case; values, nulls, and identifiers are
+preserved intact.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-# Mapeamento aba -> tabela alvo no schema raw.
+# Mapping: sheet name -> target table in the raw schema.
 SHEET_TO_TABLE = {
     "Sample TrackNow Checkouts": "tracknow_checkouts",
     "Sample PostHog Sessions": "posthog_sessions",
@@ -21,13 +21,13 @@ SHEET_TO_TABLE = {
 
 
 def to_snake_case(name: str) -> str:
-    """Normaliza um nome de coluna para snake_case.
+    """Normalize a column name to snake_case.
 
-    Regras aplicadas (sem alterar identificadores que já estão em snake_case):
-    - converte para minúsculas;
-    - quebra limites camelCase / PascalCase;
-    - converte espaços e pontuação (parênteses, hífens, barras) em underscore;
-    - colapsa underscores repetidos e remove underscores nas bordas.
+    Applied rules (without altering identifiers that are already in snake_case):
+    - convert to lowercase;
+    - split camelCase / PascalCase boundaries;
+    - convert spaces and punctuation (parentheses, hyphens, slashes) to underscores;
+    - collapse repeated underscores and strip leading/trailing underscores.
     """
     s = name.strip()
     s = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", s)
@@ -38,18 +38,18 @@ def to_snake_case(name: str) -> str:
 
 
 def sheet_to_table(sheet_name: str) -> str:
-    """Nome da tabela alvo para uma aba do Excel."""
+    """Return the target table name for an Excel sheet."""
     try:
         return SHEET_TO_TABLE[sheet_name]
     except KeyError:
-        raise ValueError(f"aba não mapeada para ingestão: {sheet_name!r}") from None
+        raise ValueError(f"Sheet not mapped for ingestion: {sheet_name!r}") from None
 
 
 def _read_sheet(excel_path: str, sheet_name: str) -> pd.DataFrame:
-    """Lê uma aba e aplica snake_case nos nomes das colunas.
+    """Read an Excel sheet and normalize column names to snake_case.
 
-    O extent lido pelo pandas.read_excel é o contrato da fonte: nenhuma linha é
-    filtrada — inclusive linhas totalmente nulas que existam dentro da planilha.
+    The extent read by pandas.read_excel is the source contract: no rows are
+    filtered - including completely null rows that exist within the spreadsheet.
     """
     df = pd.read_excel(excel_path, sheet_name=sheet_name)
     df.columns = [to_snake_case(str(c)) for c in df.columns]
@@ -57,8 +57,10 @@ def _read_sheet(excel_path: str, sheet_name: str) -> pd.DataFrame:
 
 
 def load_excel_into_duckdb(excel_path: str, duckdb_path: str) -> list[str]:
-    """Cria/carrega `duckdb_path` e grava as abas mapeadas como tabelas no
-    schema `raw`. Retorna a lista das tabelas criadas."""
+    """Create/load `duckdb_path` and save mapped sheets as tables in the `raw` schema.
+
+    Returns the list of created table names.
+    """
     db_path = Path(duckdb_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -79,7 +81,7 @@ def load_excel_into_duckdb(excel_path: str, duckdb_path: str) -> list[str]:
 
 
 def _excel_expected(excel_path: str) -> dict[str, dict]:
-    """Contagem real de linhas/colunas/nomes por aba (referência do Excel)."""
+    """Return actual count of rows/columns and column names per sheet (Excel reference)."""
     expected = {}
     for sheet_name, table_name in SHEET_TO_TABLE.items():
         df = pd.read_excel(excel_path, sheet_name=sheet_name)
@@ -93,11 +95,11 @@ def _excel_expected(excel_path: str) -> dict[str, dict]:
 
 
 def validate(excel_path: str, duckdb_path: str) -> dict:
-    """Reconcilia as tabelas raw do DuckDB com as abas correspondentes do Excel.
+    """Reconcile DuckDB raw tables against corresponding Excel sheets.
 
-    Compara: existência das tabelas, nº de linhas, nº de colunas e nomes de
-    colunas (todos normalizados para snake_case no lado Excel). Retorna um
-    relatório com os números e a flag `all_ok`.
+    Compares: table existence, row count, column count, and column names
+    (all normalized to snake_case on the Excel side). Returns a report dictionary
+    with metrics and an `all_ok` flag.
     """
     expected = _excel_expected(excel_path)
     con = duckdb.connect(str(duckdb_path))
@@ -117,8 +119,13 @@ def validate(excel_path: str, duckdb_path: str) -> dict:
     for table_name in SHEET_TO_TABLE.values():
         exp = expected[table_name]
         if table_name not in existing:
-            tables[table_name] = {"exists": False, "rows": None, "cols": None,
-                                  "columns": None, "ok": False}
+            tables[table_name] = {
+                "exists": False,
+                "rows": None,
+                "cols": None,
+                "columns": None,
+                "ok": False,
+            }
             all_ok = False
             continue
 
@@ -155,14 +162,14 @@ def main() -> None:
     excel_path = root / "data" / "source.xlsx"
     duckdb_path = root / "warehouse" / "pfm.duckdb"
 
-    print(f"Carregando {excel_path.name} em {duckdb_path} ...")
+    print(f"Loading {excel_path.name} into {duckdb_path} ...")
     created = load_excel_into_duckdb(str(excel_path), str(duckdb_path))
-    print("Tabelas criadas:", ", ".join(f"raw.{t}" for t in created))
+    print("Created tables:", ", ".join(f"raw.{t}" for t in created))
 
     report = validate(str(excel_path), str(duckdb_path))
     print(json.dumps(report, indent=2, ensure_ascii=False))
     if not report["all_ok"]:
-        raise SystemExit("Reconciliação falhou: Excel e DuckDB divergem.")
+        raise SystemExit("Reconciliation failed: Excel and DuckDB diverge.")
 
 
 if __name__ == "__main__":

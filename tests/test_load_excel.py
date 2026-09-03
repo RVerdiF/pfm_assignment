@@ -1,11 +1,11 @@
-"""Testes da Etapa 1 — ingestão Excel -> DuckDB raw.
+"""Tests for Step 1 - Excel -> DuckDB raw ingestion.
 
-Foco comportamental:
-- to_snake_case normaliza nomes de colunas sem quebrar os já snake_case.
-- sheet_to_table mapeia aba -> nome de tabela (tracknow_checkouts / posthog_sessions).
-- load_excel_into_duckdb grava schema raw + tabelas, sem filtrar/deduplicar
-  registros reais (inclusive linhas totalmente nulas presentes no extent).
-- validate reconhece reconciliação de linhas/colunas/nomes.
+Behavioral focus:
+- to_snake_case normalizes column names without breaking existing snake_case names.
+- sheet_to_table maps sheet -> table name (tracknow_checkouts / posthog_sessions).
+- load_excel_into_duckdb persists the raw schema + tables, without filtering/deduplicating
+  real records (including fully null rows present in the extent).
+- validate performs reconciliation of rows/columns/names.
 """
 import os
 
@@ -49,13 +49,13 @@ def test_sheet_to_table_maps_target_sheets():
 
 
 # ---------------------------------------------------------------------------
-# Integration: cria xlsx minúsculo e carrega no duckdb
+# Integration: create small xlsx fixture and load into duckdb
 # ---------------------------------------------------------------------------
 
 def _write_fixture_xlsx(path):
-    """Cria abas com registros reais e uma linha totalmente nula NO MEIO do
-    extent (linha absoluta 4 sem células) — representa um registro presente na
-    planilha que a ingestão deve preservar, não um rodapé fora da área de dados."""
+    """Create sheets with real records and a fully null row IN THE MIDDLE of
+    the extent (absolute row 4 with no cells) — represents a record present in
+    the spreadsheet that ingestion must preserve, not a footer outside the data area."""
     wb = openpyxl.Workbook()
     ws1 = wb.active
     ws1.title = "Sample TrackNow Checkouts"
@@ -80,8 +80,8 @@ def _write_fixture_xlsx(path):
 
 
 def _write_rows_at(ws, rows):
-    """Escreve valores nas linhas absolutas dadas (não estende a dimensão em
-    linhas sem células)."""
+    """Write values at the given absolute rows (does not extend dimensions for
+    rows without cells)."""
     for r_i, values in rows.items():
         for c_i, val in enumerate(values, start=1):
             ws.cell(row=r_i, column=c_i).value = val
@@ -115,8 +115,8 @@ def test_load_creates_raw_tables(fixture_xlsx, duckdb_path):
 
 
 def test_load_row_counts(fixture_xlsx, duckdb_path):
-    """Contagens correspondem exatamente ao extent lido do Excel (header +
-    registros reais + a linha totalmente nula interior): 4 linhas por aba."""
+    """Counts match exactly the extent read from Excel (header + real records +
+    interior fully null row): 4 rows per sheet."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:
@@ -128,7 +128,7 @@ def test_load_row_counts(fixture_xlsx, duckdb_path):
         ).fetchone()[0]
     finally:
         con.close()
-    # 3 registros reais + 1 linha totalmente nula (interior do extent)
+    # 3 real records + 1 fully null row (interior of the extent)
     assert n_tracknow == 4
     assert n_posthog == 4
 
@@ -146,8 +146,8 @@ def test_load_applies_snake_case_to_columns(fixture_xlsx, duckdb_path):
 
 
 def test_load_preserves_identifier_values(fixture_xlsx, duckdb_path):
-    """Identificadores reais preservados; a linha totalmente nula NÃO é
-    interpretada como fim da tabela — registros posteriores a ela existem."""
+    """Real identifiers are preserved; the fully null row is NOT interpreted
+    as the end of the table — records following it exist."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:
@@ -164,8 +164,8 @@ def test_load_preserves_identifier_values(fixture_xlsx, duckdb_path):
 
 
 def test_load_retains_fully_null_interior_rows(fixture_xlsx, duckdb_path):
-    """Uma linha totalmente nula dentro do extent da planilha é um registro e
-    não pode ser filtrada — nenhum filtro de dados é aplicado na ingestão."""
+    """A fully null row within the spreadsheet extent is a record and cannot
+    be filtered out — no data filters are applied during ingestion."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:
