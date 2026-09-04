@@ -102,7 +102,7 @@ models:
       - name: has_tracknow_user_id
         description: True when tracknow_user_id is present.
       - name: attribution_status
-        description: >
+        description: >-
           Decision status: 'matched' (exactly one eligible session),
           'ambiguous' (more than one eligible session ties for first),
           'unmatched' (no eligible exact match). Unmatched/ambiguous rows are

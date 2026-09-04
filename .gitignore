@@ -1,7 +1,26 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git worktrees
+.worktrees/
 
 # DuckDB local warehouse (gerado por ingestion/load_excel.py)
 warehouse/*.duckdb
 warehouse/*.duckdb.wal
+

@@ -1,0 +1,123 @@
+version: 2
+
+models:
+  - name: stg_tracknow_checkouts
+    description: >
+      One row per TrackNow checkout order (grain: conversion_id). Clean,
+      stable interface over raw.tracknow_checkouts. Denied orders are kept for
+      audit; is_valid_conversion = status <> 'denied'.
+    columns:
+      - name: conversion_id
+        description: >-
+          Unique TrackNow order identifier (source tracknow_order_id). The raw
+          string is trimmed and empty/whitespace-only values become NULL, so the
+          cleaned key never carries padding; NULL keys are rejected by the
+          not_null test below.
+        tests:
+          - not_null
+          - unique
+      - name: conversion_date
+        description: Date the conversion was created (source created_date).
+      - name: tracknow_user_id
+        description: TrackNow internal user id. Null when absent in source.
+      - name: click_id
+        description: >
+          Affiliate click id passed at ad click time. Case preserved. Null when
+          absent in source; absence is part of the attribution problem.
+      - name: affiliate_session_id
+        description: >
+          Session id assigned by TrackNow when the affiliate link was clicked.
+          Null when absent in source.
+      - name: firm_id
+        description: Synthetic identifier of the prop firm.
+      - name: status
+        description: >-
+          Conversion status: 'active' (valid), 'refunded' (returned), 'denied'
+          (invalid). Denied orders are preserved for audit in this layer. The
+          raw string is trimmed and empty/whitespace-only values become NULL.
+          is_valid_conversion is derived from this same normalized value, so a
+          whitespace-padded ' denied ' normalizes to 'denied' and is not valid.
+          A NULL status (blank in source) is possible only as a data-quality
+          anomaly and yields a NULL is_valid_conversion flag (validity
+          unknown), never a boolean default.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['active', 'refunded', 'denied']
+      - name: order_price_gbp
+        description: Order price in GBP.
+      - name: commission_gbp
+        description: >
+          Actual PFM commission per order in GBP (source referral_bonus_gbp).
+          Always non-negative in the sample data; covered by the singular test
+          dbt/tests/commission_non_negative.sql.
+        tests:
+          - not_null
+      - name: coupon_used
+        description: Coupon code applied to the order, if any. Null otherwise.
+      - name: trading_platform
+        description: Trading platform used by the customer.
+      - name: first_order
+        description: True when this is the customer's first order.
+      - name: account_size
+        description: Account size associated with the order (GBP).
+      - name: is_valid_conversion
+        description: >-
+          True when status <> 'denied', evaluated on the normalized status;
+          this is the card's expression verbatim. Denied rows remain available.
+          When the normalized status is NULL (blank/whitespace-only in source,
+          a data-quality anomaly), the flag is NULL under SQL three-valued
+          logic: validity is unknown and is never assumed true nor collapsed
+          into false. Downstream layers treat NULL as requiring review.
+
+  - name: stg_posthog_sessions
+    description: >
+      One row per PostHog web session (grain: session_id). Clean, stable
+      interface over raw.posthog_sessions. Session-level flags describe what
+      happened inside the session; no attribution is performed here.
+    columns:
+      - name: session_id
+        description: >-
+          Unique session identifier. The raw string is trimmed and
+          empty/whitespace-only values become NULL, so the cleaned key never
+          carries padding; NULL keys are rejected by the not_null test below.
+        tests:
+          - not_null
+          - unique
+      - name: distinct_id
+        description: >
+          Anonymous PostHog user identifier (source posthog_distinct_id),
+          cookie-based and device-scoped.
+      - name: session_date
+        description: Calendar date of the session.
+      - name: session_start_at
+        description: Session start timestamp with UTC timezone.
+      - name: session_duration_seconds
+        description: Session duration in seconds.
+      - name: click_id_from_url
+        description: Raw click id extracted from the landing URL. Null when absent.
+      - name: gclid
+        description: Google click id. Null when the user did not arrive from Google.
+      - name: fbclid
+        description: Facebook/Meta click id. Null when not from a Meta ad.
+      - name: utm_source
+        description: UTM source parameter.
+      - name: utm_medium
+        description: UTM medium parameter.
+      - name: utm_campaign
+        description: UTM campaign parameter.
+      - name: utm_content
+        description: >
+          UTM content parameter; for Meta paid sessions this carries the ad_id.
+      - name: country_code
+        description: ISO country code of the session.
+      - name: session_entry_pathname
+        description: URL path the user first landed on in the session.
+      - name: has_checkout_started
+        description: True if a checkout was started during the session.
+      - name: has_tracknow_conversion
+        description: >
+          True if a TrackNow purchase event fired in this session. Session-level
+          only; cross-session purchases are not captured.
+      - name: events_in_session
+        description: Number of PostHog events recorded in the session.
