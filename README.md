@@ -4,6 +4,30 @@ A local data pipeline for Excel ingestion, deterministic conversion attribution,
 and mart consumption. The warehouse is DuckDB, dbt owns the transformation
 layers, and Streamlit is a thin read-only consumer of the published marts.
 
+## Pipeline
+
+```text
+data/source.xlsx  (Sample TrackNow Checkouts + Sample PostHog Sessions)
+        |
+        v
+ingestion/load_excel.py  (Polars, snake_case only — values and nulls untouched)
+        |
+        v
+warehouse/pfm.duckdb  (raw schema: raw.tracknow_checkouts, raw.posthog_sessions)
+        |
+        v
+dbt staging  (stg_tracknow_checkouts, stg_posthog_sessions)
+        |
+        v
+dbt intermediate  (attribution candidates -> deterministic attribution -> unmatched diagnostics)
+        |
+        v
+dbt marts  (fct_revenue_attribution, fct_commission_daily_local, mart_attribution_health)
+        |
+        v
+consumers  (EDA notebook, Streamlit app, BigQuery consumption query)
+```
+
 ## Requirements
 
 - Python 3.11 or newer
@@ -11,15 +35,37 @@ layers, and Streamlit is a thin read-only consumer of the published marts.
 - The Python dependencies declared in `pyproject.toml`
 - `data/source.xlsx` (already delivered with this project)
 
-Create or activate a virtual environment, then install the project and the
-optional consumer dependency. The project dependencies include `dbt-core` and
-`dbt-duckdb`, so the documented pipeline is available after this install:
+Create or activate a virtual environment, then install the project with the
+`consumer` and `dev` extras. The project dependencies include `dbt-core` and
+`dbt-duckdb`; `consumer` adds Streamlit and `dev` adds pytest and Jupyter, so
+every step of the Quickstart below works from a clean environment:
 
 ```bash
-python -m pip install -e ".[consumer]"
+python -m pip install -e ".[consumer,dev]"
 ```
 
-## Reproduce the pipeline locally
+## Quickstart
+
+### 1. Load the raw data
+
+The ingestion command reads the two analytical worksheets in
+`data/source.xlsx`, normalizes column names to snake_case, and creates or
+replaces these raw tables in `warehouse/pfm.duckdb`:
+
+- `raw.tracknow_checkouts`
+- `raw.posthog_sessions`
+
+From the repository root:
+
+```bash
+python ingestion/load_excel.py
+```
+
+It preserves source values and null rows within the worksheet extent. Running
+it again is safe and deterministic for the local warehouse. The full contract
+is documented in `ingestion/ingestion.md`.
+
+### 2. Build the dbt models
 
 The checked-in profile is an example only. Copy it into the project-local dbt
 profile directory; this avoids credentials, absolute paths, and changes to a
@@ -31,7 +77,6 @@ From the repository root:
 cp dbt/profiles.yml.example dbt/profiles.yml
 export DBT_PROFILES_DIR="$PWD/dbt"
 
-python ingestion/load_excel.py
 cd dbt
 dbt debug
 dbt build
@@ -49,15 +94,27 @@ cd dbt
 dbt clean
 ```
 
-The ingestion command reads the two analytical worksheets in
-`data/source.xlsx`, normalizes column names to snake_case, and creates or
-replaces these raw tables:
+### 3. Run the tests
 
-- `raw.tracknow_checkouts`
-- `raw.posthog_sessions`
+```bash
+pytest -q
+```
 
-It preserves source values and null rows within the worksheet extent. Running
-it again is safe and deterministic for the local warehouse.
+### 4. Explore the data
+
+```bash
+jupyter notebook notebooks/01_data_exploration.ipynb
+```
+
+See `notebooks/README.md` for the EDA findings that shaped the dbt pipeline.
+
+### 5. Launch the consumer
+
+```bash
+streamlit run streamlit/app.py
+```
+
+See the Streamlit consumer section below for details.
 
 ## dbt layer contract
 
@@ -73,10 +130,12 @@ schemas directly as `raw`, `staging`, `intermediate`, and `marts`.
 | Marts | `fct_revenue_attribution`, `fct_commission_daily_local`, `mart_attribution_health` | Tables in `marts` | Consumer-facing revenue and monitoring relations |
 
 The `raw` source declaration is in `dbt/models/sources.yml`. Attribution is
-exact-match and deterministic in the intermediate layer; downstream marts and
-consumers carry that decision rather than re-implementing it. The local daily
-commission model is explicitly a sample-derived proxy because the authoritative
-`analytics_core.f_commission_daily` source was not provided.
+exact-match and deterministic in the intermediate layer (see
+`dbt/models/intermediate/attribution/winner_rules.yml` and
+`docs/decisions.md`); downstream marts and consumers carry that decision rather
+than re-implementing it. The local daily commission model is explicitly a
+sample-derived proxy because the authoritative `analytics_core.f_commission_daily`
+source was not provided.
 
 Run selected checks when iterating:
 
@@ -89,6 +148,22 @@ dbt build --select marts
 
 `dbt build` runs model builds and the declared schema/singular tests. The
 project has no external package dependencies, so `dbt deps` is not required.
+
+## Testing strategy
+
+Tests run in two layers:
+
+1. **pytest** (`tests/`) — Python-level behavior. `tests/test_load_excel.py`
+   covers ingestion: snake_case normalization, sheet-to-table mapping, raw
+   table creation, preservation of fully null interior rows
+   (`drop_empty_rows=False`), and Excel-to-DuckDB reconciliation.
+   `tests/test_project_structure.py` guards the project manifest and the
+   checked-in BigQuery consumption asset.
+2. **dbt tests** — data contracts inside the model `schema.yml` files
+   (`not_null`, `unique`, `accepted_values`) plus 23 singular tests under
+   `dbt/tests/` that prove invariants: no fan-out, exact-match-only
+   attribution, row parity between layers, unmatched reasons, and marts
+   reconciling to staging.
 
 ## Streamlit consumer
 
@@ -128,15 +203,32 @@ transformation logic.
 ## Repository layout
 
 ```text
-data/source.xlsx                 Delivered source workbook
-ingestion/load_excel.py           Excel -> DuckDB raw loader
-dbt/dbt_project.yml               dbt project and layer configuration
-dbt/profiles.yml.example          Credential-free local profile template
-dbt/models/sources.yml            Raw source declaration
-dbt/models/staging/               Staging views
-dbt/models/intermediate/          Attribution and diagnostics
-dbt/models/marts/                 Consumer-facing tables
+data/source.xlsx                   Delivered source workbook
+ingestion/load_excel.py            Excel -> DuckDB raw loader
+ingestion/ingestion.md             Ingestion contract and how to re-run it
+dbt/dbt_project.yml                dbt project and layer configuration
+dbt/profiles.yml.example           Credential-free local profile template
+dbt/macros/                        Project macros (schema naming)
+dbt/models/sources.yml             Raw source declaration
+dbt/models/staging/                Staging views
+dbt/models/intermediate/           Attribution and diagnostics
+dbt/models/marts/                  Consumer-facing tables
+dbt/tests/                         Singular tests (data contracts and invariants)
+notebooks/01_data_exploration.ipynb  Pre-modeling EDA
+notebooks/README.md                How to run the EDA and what it found
+docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/attribution_health.sql  BigQuery mart consumption query
-streamlit/app.py                  Read-only marts consumer
-warehouse/pfm.duckdb              Generated local warehouse (ignored)
+streamlit/app.py                   Read-only marts consumer
+tests/                             pytest suites (ingestion, project structure)
+warehouse/pfm.duckdb               Generated local warehouse (ignored)
 ```
+
+## Documentation
+
+- `ingestion/ingestion.md` — sheet-to-table mapping, snake_case contract, raw
+  schema, and how to re-run ingestion.
+- `notebooks/README.md` — EDA purpose, execution, and conclusions that shaped
+  the dbt pipeline.
+- `docs/decisions.md` — closed decisions: Polars ingestion, preservation of
+  fully null rows, exact click-ID matching, local DuckDB, mandatory
+  review -> PR -> manual merge flow, English-only code.
