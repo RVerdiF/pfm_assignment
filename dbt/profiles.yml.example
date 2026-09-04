@@ -1,0 +1,14 @@
+# Copy this file to dbt/profiles.yml for an isolated, local profile:
+#
+#   cp dbt/profiles.yml.example dbt/profiles.yml
+#   export DBT_PROFILES_DIR="$PWD/dbt"
+#
+# The database path is relative to the documented working directory (dbt/).
+# No credentials or machine-specific absolute paths are required.
+pfm_assignment:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: ../warehouse/pfm.duckdb
+      threads: 1
