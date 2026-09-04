@@ -1,0 +1,96 @@
+Evidence — Card 2 (t_446cfc9b) — Data analysis and visualizations
+Branch: wt/t_446cfc9b  (pushed to RVerdiF/pfm_assignment)
+Base:   origin/main ed5f540 (Card 1 merged via PR #17)
+Commits:
+  feat(streamlit): enrich attribution analysis page with Card-2 sections
+  test(streamlit): cover analysis helpers and page render against marts
+  docs(streamlit): record Card 2 validation evidence
+
+Scope delivered (all criteria map to code under streamlit/ + tests + docs)
+--------------------------------------------------------------------------
+* streamlit/sections/analysis.py  — full Card-2 analysis page, four sections,
+  all numbers read from dbt relations:
+    - Attribution overview: valid conversions, commission, matched /
+      unmatched / ambiguous, match rate and unmatched rate over the
+      revenue-valid population (marts.fct_revenue_attribution, 92 rows).
+      Reconciliation strip: decided conversions (intermediate
+      int_conversion_attribution, 100) = valid 92 + denied 8, shown as
+      side-by-side metrics; detailed mart rows (fct_revenue_attribution and
+      mart_attribution_health) moved into a collapsible audit expander.
+    - Why conversions are not attributed: bar chart + table over
+      intermediate.int_unmatched_conversions grouped by unmatched_reason.
+      The five-reason dbt taxonomy is zero-filled (missing_click_id,
+      click_id_not_found, outside_posthog_sample_window,
+      multiple_candidates, unknown) so absent categories stay visible; a
+      caption reconciles the total (100 non-matched conversions, mutually
+      exclusive reasons).
+    - Marketing attribution: conversions + commission by utm_source, only
+      attributed sessions; unmatched conversions roll into an explicit
+      'Unattributed' bucket (no channel inferred). Match-method panel shows
+      the gclid_exact / fbclid_exact / url_click_exact vocabulary zero-filled,
+      with an empty-state note when no method was exercised.
+    - Revenue and commission: attributed vs unattributed commission over the
+      valid population; fct_commission_daily_local is shown strictly as a
+      labelled daily proxy (line chart + audit table) complement, never as the
+      authoritative source.
+* No attribution rule, eligibility window, business join, or taxonomy is
+  re-implemented in Python: every value is an aggregate over a dbt relation
+  (marts.* or the diagnostic intermediate view). The only non-mart read is
+  intermediate.int_unmatched_conversions, consumed for its pre-computed
+  unmatched_reason column only (documented as ADR #8).
+* tests/test_streamlit_analysis.py  — 6 hermetic unit tests over a synthetic
+  DuckDB shaped like the real marts: overview metrics are pure aggregates,
+  zero-fill of the full reason vocabulary, percentage reconciliation to 100%,
+  zero-fill of the full match-method vocabulary, unattributed grouping, and
+  attributed/unattributed commission reconciliation.
+* tests/test_analysis_page.py + tests/_analysis_driver.py  — 4 AppTest render
+  checks against the REAL built worktree warehouse (PFM_DUCKDB_PATH):
+  no exceptions + four section headers; KPIs reconcile to the mart totals
+  (92 valid / GBP 1,001.70 / 0 matched / 92 unmatched / 0 ambiguous /
+  match 0.0% / unmatched 100.0% / decided 100 / denied 8); diagnosis caption
+  reconciles the 100 non-matched conversions and the no-match-method note is
+  rendered; source-level guard that the consumer never reads raw/staging
+  relations.
+* README.md / docs/decisions.md  — streamlit consumer documents the four
+  analysis sections and the diagnostic intermediate view; ADR #8 records the
+  decision to allow the consumer to read int_unmatched_conversions as a
+  read-only diagnostic (never joined).
+
+Acceptance verification (real executions)
+-----------------------------------------
+1. Warehouse built in the isolated worktree: ingestion + `dbt build`
+   completed, PASS=74 WARN=0 ERROR=0 (4 table models, 64 data tests, 1 unit
+   test, 5 view models).
+2. Real mart ground truth probed from the built warehouse:
+   fct_revenue_attribution 92 rows; all match_status='unmatched'
+   (85 active / 7 refunded; 8 denied excluded at revenue layer);
+   commission GBP 1,001.70. int_conversion_attribution 100 decided
+   (100 unmatched / 0 matched / 0 ambiguous). int_unmatched_conversions 100:
+   click_id_not_found 40, outside_posthog_sample_window 47,
+   missing_click_id 13 (multiple_candidates 0, unknown 0).
+   mart_attribution_health sums 100/0/100/0/0/0/0 over 29 date groups.
+   fct_commission_daily_local sums to 92 conversions / GBP 1,001.70.
+3. Headless AppTest against the real warehouse (test_analysis_page.py):
+   4 passed; page renders all four sections with 0 exceptions and the KPIs
+   equal the probed mart totals (see assertions above).
+4. Hermetic helper tests (test_streamlit_analysis.py): 6 passed.
+5. Full regression suite: 35 passed (25 pre-existing + 6 helper + 4 AppTest).
+6. Real server: `streamlit run streamlit/app.py --server.headless true`
+   booted with the worktree warehouse; /_stcore/health returned 200.
+7. git diff --check clean; no raw/staging reads in the consumer (guard test
+   + ADR #8 document the single intermediate diagnostic read).
+
+Notes
+-----
+* Board routing mismatch repeated: card workspace_path is a scratch dir under
+  the pfm_assignment board; per board precedent implementation lives in the
+  real repo on an isolated branch (wt/t_446cfc9b).
+* All numbers reflect the real sample: 0% coverage. The sample's PostHog
+  window/sessions carry no click id that exactly equals any TrackNow
+  click_id, so every conversion is unmatched and every reason bucket is
+  explained by the diagnostic view. The UI is built so the same panels render
+  meaningfully when a future sample does contain matches (zero-filled
+  vocabularies, empty-state notes, no hard-coded totals).
+* The health mart and the diagnosis panel intentionally cover the full decided
+  population (incl. denied) while the revenue KPIs cover the valid population;
+  the audit strip reconciles 100 = 92 + 8 on the page itself.

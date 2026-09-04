@@ -200,16 +200,23 @@ location.
 ### Pages and marts
 
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
-`Methodology and limitations`) that read only the published marts:
+`Methodology and limitations`) that read only published dbt relations:
 
 - `marts.fct_revenue_attribution` for valid-conversion revenue, commission,
   match status, and UTM breakdowns;
+- `intermediate.int_unmatched_conversions` (a dbt diagnostic view, read for
+  its pre-computed `unmatched_reason` column only — never joined) for the
+  "why conversions are not attributed" audit panel;
 - `marts.mart_attribution_health` for daily/source attribution monitoring;
 - `marts.fct_commission_daily_local` for the clearly labelled local commission
   proxy.
 
-It does not query raw or staging relations and does not perform attribution
-joins in Python.
+The analysis page presents four sections: an attribution overview with match
+and unmatched rates, the unmatched-reason diagnosis (bar chart + table with
+the full dbt taxonomy zero-filled), marketing attribution by UTM source and by
+exact match method, and revenue/commission with the daily proxy kept as an
+explicit complement. It does not query raw or staging relations and does not
+perform attribution joins in Python.
 
 ## BigQuery consumption asset
 
