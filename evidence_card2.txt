@@ -2,9 +2,9 @@ Evidence — Card 2 (t_446cfc9b) — Data analysis and visualizations
 Branch: wt/t_446cfc9b  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main ed5f540 (Card 1 merged via PR #17)
 Commits:
-  feat(streamlit): enrich attribution analysis page with Card-2 sections
-  test(streamlit): cover analysis helpers and page render against marts
-  docs(streamlit): record Card 2 validation evidence
+  c86f368 feat(streamlit): enrich attribution analysis page with Card-2 sections
+  cf70d26 test(streamlit): cover analysis helpers and page render against marts
+  f6d4e11 docs(streamlit): record Card 2 validation evidence
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
