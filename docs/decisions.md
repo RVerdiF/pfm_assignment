@@ -180,3 +180,35 @@ charts (the health mart, the revenue mart, and the pre-computed
 and a different valid warehouse via the documented `PFM_DUCKDB_PATH` override
 is never contradicted by the walkthrough. Layer responsibilities and rule
 vocabulary are kept in sync with the dbt model headers and docs in this file.
+
+---
+
+## 10. Deploying to Streamlit Community Cloud uses `requirements.txt`, not Poetry
+
+**Context:** A Streamlit Community Cloud deploy of the walkthrough failed
+with `The current project could not be installed: No file/folder found for
+package pfm-assignment`. Community Cloud treats a root `pyproject.toml` as a
+**Poetry** manifest and runs `poetry install`. This repository is a plain
+setuptools/PEP 621 project (`[project]` + `[build-system]` with setuptools)
+— not a Poetry project and not an installable package — so Poetry's attempt
+to install the project itself fails. Adding `package-mode = false` would only
+help a genuine Poetry project; here the correct, supported path is the one
+Community Cloud prefers.
+
+**Decision:** The deploy environment is installed from a root
+`requirements.txt` with fully pinned, locally validated versions. Community
+Cloud resolves `requirements.txt` before `pyproject.toml`, so the deploy
+never invokes Poetry and `pyproject.toml` remains the single manifest for
+local development. Only one dependency file (`requirements.txt`) drives the
+deploy. The app runs on **Python 3.12** — Community Cloud's default and the
+version the pins are validated against. No artificial Python package is
+created to satisfy a package manager.
+
+**Consequences:** The deploy installs exactly the pinned versions that were
+validated in a clean Python 3.12 virtualenv (full pytest suite green and a
+real first-boot bootstrap: no warehouse file and no dbt profile present, then
+ingestion + `dbt build` create the required relations before the app serves
+the pages). Local development is unchanged (`pip install -e ".[consumer,dev]"`
+reads `pyproject.toml`). Keeping `requirements.txt` in sync with
+`pyproject.toml` is a manual step documented in the README; future
+dependency bumps must be validated in both manifests.

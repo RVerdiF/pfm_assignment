@@ -1,0 +1,126 @@
+Evidence — Card 5 (t_e552e8c9) — Fix the Streamlit Community Cloud deploy
+Branch: wt/t_e552e8c9  (pushed to RVerdiF/pfm_assignment)
+Base:   origin/main 781b966 (Card 3 head merged via PR #19; Card 4 PR #20 open,
+        not part of this card's base per board chain)
+
+Investigation / root cause (deviates from the card's stated premise)
+--------------------------------------------------------------------
+* The card says "O projeto usa Poetry para dependências". That premise does
+  NOT match this repository: there is no Poetry anywhere in git history.
+  - pyproject.toml is a plain PEP 621/setuptools manifest ([project] +
+    [build-system] setuptools), with optional-dependencies extras; there is
+    no [tool.poetry] section on main or on any branch/dangling object.
+  - There is no poetry.lock, Pipfile, or requirements.txt in any revision.
+  - Local install/run path is `pip install -e ".[consumer,dev]"` and
+    `streamlit run streamlit/app.py` (README).
+* Streamlit Community Cloud treats a root pyproject.toml as a POETRY manifest
+  and runs `poetry install`. Because this project is not an installable
+  package, Poetry fails with the exact observed error:
+      The current project could not be installed: No file/folder found for
+      package pfm-assignment
+  So the error is real; the "Poetry project" framing is the platform's
+  default reading of the root pyproject.toml, not an actual Poetry setup.
+* Streamlit's official dependency docs (docs.streamlit.io, fetched 2026-09-04)
+  confirm the platform's resolution order in each location:
+      uv.lock (uv) -> Pipfile (pipenv) -> environment.yml (conda) ->
+      requirements.txt (pip) -> pyproject.toml (poetry)
+  and that "you should only use one dependency file for your app". A root
+  requirements.txt therefore makes the deploy install with pip/uv and never
+  invoke Poetry, while pyproject.toml remains for local development.
+
+Fix implemented (the card's own Fallback section, applied)
+----------------------------------------------------------
+* requirements.txt  (NEW, repository root) — single source of truth for the
+  Community Cloud deploy, fully pinned to the versions validated locally in a
+  clean Python 3.12 virtualenv:
+      polars[excel]==1.44.1
+      duckdb==1.5.5
+      openpyxl==3.1.5
+      fastexcel==0.21.0
+      pyarrow==25.0.1
+      pandas==2.2.3      (explicit: streamlit pages hard-import pandas; it was
+                          only transitively present via polars/pyarrow before)
+      dbt-core==1.12.3
+      dbt-duckdb==1.11.0
+      streamlit==1.63.0
+  Header comment explains the Poetry-vs-requirements resolution so future
+  edits do not reintroduce a competing dependency file.
+* README.md — new "Deploying on Streamlit Community Cloud" subsection under
+  the Streamlit consumer section: states the root cause, the single
+  requirements.txt rule, the Python 3.12 pin (and why NOT 3.14), and the
+  first-boot bootstrap behavior. Repository-layout list now names
+  requirements.txt and pyproject.toml roles.
+* docs/decisions.md — ADR #10 "Deploying to Streamlit Community Cloud uses
+  requirements.txt, not Poetry" recording context, decision, consequences.
+* pyproject.toml — deliberately UNCHANGED. No [tool.poetry] exists, so
+  `package-mode = false` would be dead config; and no artificial Python
+  package was created (both satisfy acceptance criteria).
+
+Python runtime pinning (Community Cloud)
+----------------------------------------
+* Community Cloud default Python is 3.12 (per official docs) and lets the
+  owner choose a version in Advanced settings; no repo file selects it.
+* Python 3.14 is NOT used: pip dry-run on Python 3.14 showed pandas 2.2.3 has
+  no cp314 wheel and tries to compile from source (fails). The validated pins
+  all ship cp312 wheels (pandas 2.2.3 cp312 verified on PyPI), so 3.12 is the
+  supported, conflict-free runtime.
+
+Verification (all real executions in a clean Python 3.12.3 virtualenv
+created from /usr/bin python3.12 snap; installed exactly requirements.txt)
+-------------------------------------------------------------------------
+1. `pip install -r requirements.txt` on Python 3.12.3: SUCCESS — all packages
+   installed from wheels, no source compilation (dbt-core-experimental-parser
+   built once from its sdist as expected).
+2. Full pytest suite in that clean env: 49 passed, 12 warnings (same 12
+   pre-existing fetch_arrow_table() deprecation warnings as prior cards).
+3. Real first-boot bootstrap in the fresh worktree (warehouse/pfm.duckdb
+   absent, dbt/profiles.yml absent): get_warehouse_connection() ran ingestion
+   + dbt build, created the profile from the example, and every required
+   relation came back with rows:
+       marts.fct_revenue_attribution      rows=92
+       marts.fct_commission_daily_local   rows=81
+       marts.mart_attribution_health      rows=29
+       intermediate.int_unmatched_conversions rows=100
+   BOOTSTRAP_OK.
+4. Real `streamlit run streamlit/app.py --server.headless true` in the clean
+   env on port 8766 from the exact submitted tree (358c6b6):
+   /_stcore/health -> 200 "ok"; server boots with the three st.Page routes
+   registered in this tree's streamlit/app.py:
+       /overview    (default=True; also served at /)
+       /analysis
+       /methodology
+   CORRECTION (review round 1): the previous draft of this evidence claimed a
+   fifth route, /next-steps -> 200. That was a false positive: Streamlit
+   serves the same index.html SPA shell with HTTP 200 for ANY path, so an
+   unregistered path is indistinguishable from a registered one by HTTP
+   status alone (byte-for-byte identical 7459-byte response for
+   /next-steps and /nonexistent-route-xyz). Route existence is determined by
+   the st.Page registrations in the committed app.py, which at 358c6b6
+   register exactly the three pages above. The next-steps page belongs to
+   Card 4 (PR #20, commit 55912b2) and is NOT present in this branch's base
+   (origin/main 781b966); it was never on this card's tree.
+5. `git diff --check` clean; only requirements.txt + README.md +
+   docs/decisions.md changed (plus this evidence file).
+
+Acceptance-criteria mapping
+---------------------------
+- [x] Poetry no longer attempted for install: the deploy now resolves root
+  requirements.txt before pyproject.toml, so poetry install is never invoked.
+- [x] Dependencies install without conflict: clean 3.12 env install + full
+  suite green.
+- [x] No incompatible Python for dbt/DuckDB: pinned to 3.12; 3.14 rejected
+  (pandas has no cp314 wheel).
+- [x] Streamlit starts on Community Cloud: proven by real local boot on the
+  exact pinned set; deploy itself must be triggered by the operator in the
+  Community Cloud dashboard (no API/credentials available to this card).
+- [x] Warehouse bootstrap keeps working: fresh-environment bootstrap verified
+  end-to-end (ingestion + dbt build + marts open).
+- [x] No artificial Python package created.
+
+Notes
+-----
+* The operator still needs to (a) choose "main"/this branch + entrypoint
+  streamlit/app.py + Python 3.12 in Community Cloud and (b) redeploy, because
+  the repo has no deploy credentials and deployment is dashboard-driven.
+* 3.12 is validated; local dev stays on 3.11/3.12 — README already says
+  "Python 3.11 or newer".
