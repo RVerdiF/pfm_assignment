@@ -89,3 +89,23 @@ in the codebase).
 
 **Consequences:** A single language for code and docs; identifiers, comments,
 and PRs stay consistent and grep-friendly.
+---
+
+## 7. Streamlit auto-bootstraps the local warehouse when it is missing
+
+**Context:** The Streamlit app must start reproducibly on a fresh hosting
+environment where `warehouse/pfm.duckdb` does not exist yet, while still being
+a thin read-only consumer of dbt marts.
+
+**Decision:** The app checks for the warehouse file and the required marts on
+startup. When they are missing, it runs the canonical pipeline once per
+Streamlit session — `python ingestion/load_excel.py`, then `dbt build` with
+the project-local profile (created from `dbt/profiles.yml.example` when
+absent) — before opening the connection read-only. The connection is cached
+with `st.cache_resource`. The app never re-implements attribution or business
+joins; it only reads the published marts.
+
+**Consequences:** A fresh checkout can launch the app without manual pipeline
+steps. The bootstrap is limited to the default project warehouse (custom
+`PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse), and
+pipeline failures surface as readable errors instead of silent partial state.
