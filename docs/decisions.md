@@ -109,3 +109,31 @@ joins; it only reads the published marts.
 steps. The bootstrap is limited to the default project warehouse (custom
 `PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse), and
 pipeline failures surface as readable errors instead of silent partial state.
+
+---
+
+## 8. The Streamlit consumer may read the diagnostic intermediate view
+
+**Context:** Card 2 asks the analysis page to explain *why* conversions are
+not attributed (`missing_click_id`, `click_id_not_found`,
+`outside_posthog_sample_window`, `multiple_candidates`, `unknown`). That
+explanation is produced once, deterministically, by
+`int_unmatched_conversions` in the intermediate layer; re-deriving it in the
+app would duplicate the attribution-adjacent classification logic the project
+explicitly keeps out of Python.
+
+**Decision:** The consumer may read `intermediate.int_unmatched_conversions`
+as a read-only diagnostic relation — an aggregate over its pre-computed
+`unmatched_reason` column only, never a join. It remains forbidden from
+reading raw/staging relations and from re-implementing attribution rules. The
+intermediate relation is materialized as a dbt view, so it always mirrors the
+latest attribution table. All other aggregate totals the page needs (decided
+conversions including denied rows, match status, daily/source health) are
+published by `marts.mart_attribution_health` and read from that mart.
+
+**Consequences:** The diagnosis panel reconciles with
+`int_conversion_attribution` by construction and stays vocabulary-stable (the
+page zero-fills the full declared taxonomy). The audit trail remains intact:
+the view is a strict filtered projection of the attribution decision table.
+The intermediate-layer reading is narrow and documented so later consumers do
+not broaden it into business joins.
