@@ -35,12 +35,13 @@ consumers  (EDA notebook, Streamlit app, BigQuery consumption query)
 - The Python dependencies declared in `pyproject.toml`
 - `data/source.xlsx` (already delivered with this project)
 
-Create or activate a virtual environment, then install the project and the
-optional consumer dependency. The project dependencies include `dbt-core` and
-`dbt-duckdb`, so the documented pipeline is available after this install:
+Create or activate a virtual environment, then install the project with the
+`consumer` and `dev` extras. The project dependencies include `dbt-core` and
+`dbt-duckdb`; `consumer` adds Streamlit and `dev` adds pytest and Jupyter, so
+every step of the Quickstart below works from a clean environment:
 
 ```bash
-python -m pip install -e ".[consumer]"
+python -m pip install -e ".[consumer,dev]"
 ```
 
 ## Quickstart
