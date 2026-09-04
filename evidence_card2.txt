@@ -5,6 +5,8 @@ Commits:
   c86f368 feat(streamlit): enrich attribution analysis page with Card-2 sections
   cf70d26 test(streamlit): cover analysis helpers and page render against marts
   f6d4e11 docs(streamlit): record Card 2 validation evidence
+  512772a docs(streamlit): pin Card 2 commit SHAs in evidence file
+  139ee50 fix(streamlit): address Card-2 rework round 1   <- this submission
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
@@ -13,54 +15,63 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
     - Attribution overview: valid conversions, commission, matched /
       unmatched / ambiguous, match rate and unmatched rate over the
       revenue-valid population (marts.fct_revenue_attribution, 92 rows).
-      Reconciliation strip: decided conversions (intermediate
-      int_conversion_attribution, 100) = valid 92 + denied 8, shown as
-      side-by-side metrics; detailed mart rows (fct_revenue_attribution and
-      mart_attribution_health) moved into a collapsible audit expander.
+      Reconciliation strip: decided conversions (100) = valid 92 + denied 8.
+      The decided total is read from marts.mart_attribution_health
+      (sum(total_conversions)), NOT from intermediate.int_conversion_
+      attribution, so the page's only intermediate read is the ADR-8
+      diagnostic view. Detailed mart rows (fct_revenue_attribution and
+      mart_attribution_health) live in a collapsible audit expander.
     - Why conversions are not attributed: bar chart + table over
       intermediate.int_unmatched_conversions grouped by unmatched_reason.
       The five-reason dbt taxonomy is zero-filled (missing_click_id,
       click_id_not_found, outside_posthog_sample_window,
-      multiple_candidates, unknown) so absent categories stay visible; a
-      caption reconciles the total (100 non-matched conversions, mutually
-      exclusive reasons).
-    - Marketing attribution: conversions + commission by utm_source, only
-      attributed sessions; unmatched conversions roll into an explicit
+      multiple_candidates, unknown). Percentages are guarded against an
+      empty relation: when the total is 0 the rendered percents are 0.0
+      (never NaN from a 0/0 division), so an all-matched warehouse still
+      renders a complete count-and-percentage diagnosis.
+    - Marketing attribution: conversions AND commission by utm_source shown
+      as two side-by-side horizontal bar charts (the visual requirement),
+      plus an audit table carrying both columns; only attributed sessions
+      are grouped, and unmatched/ambiguous conversions roll into an explicit
       'Unattributed' bucket (no channel inferred). Match-method panel shows
-      the gclid_exact / fbclid_exact / url_click_exact vocabulary zero-filled,
+      the gclid_exact / fbclid_exact / url_click_exact vocabulary zero-filled
       with an empty-state note when no method was exercised.
     - Revenue and commission: attributed vs unattributed commission over the
       valid population; fct_commission_daily_local is shown strictly as a
-      labelled daily proxy (line chart + audit table) complement, never as the
-      authoritative source.
+      labelled daily proxy (line chart + audit table) complement, never as
+      the authoritative source.
 * No attribution rule, eligibility window, business join, or taxonomy is
-  re-implemented in Python: every value is an aggregate over a dbt relation
-  (marts.* or the diagnostic intermediate view). The only non-mart read is
-  intermediate.int_unmatched_conversions, consumed for its pre-computed
-  unmatched_reason column only (documented as ADR #8).
-* tests/test_streamlit_analysis.py  — 6 hermetic unit tests over a synthetic
+  re-implemented in Python. Every value is an aggregate over a dbt relation.
+  The only non-mart read is intermediate.int_unmatched_conversions, consumed
+  for its pre-computed unmatched_reason column only (ADR #8).
+* tests/test_streamlit_analysis.py  — 7 hermetic unit tests over a synthetic
   DuckDB shaped like the real marts: overview metrics are pure aggregates,
   zero-fill of the full reason vocabulary, percentage reconciliation to 100%,
-  zero-fill of the full match-method vocabulary, unattributed grouping, and
-  attributed/unattributed commission reconciliation.
-* tests/test_analysis_page.py + tests/_analysis_driver.py  — 4 AppTest render
+  EMPTY-RELATION behavior (all reasons 0, all percents valid 0.0), zero-fill
+  of the full match-method vocabulary, unattributed grouping, and
+  attributed/unattributed commission reconciliation. The synthetic fixture
+  mirrors the mart surface the app reads (fct_revenue_attribution,
+  mart_attribution_health, int_unmatched_conversions, daily proxy).
+* tests/test_analysis_page.py + tests/_analysis_driver.py  — 5 AppTest render
   checks against the REAL built worktree warehouse (PFM_DUCKDB_PATH):
   no exceptions + four section headers; KPIs reconcile to the mart totals
   (92 valid / GBP 1,001.70 / 0 matched / 92 unmatched / 0 ambiguous /
   match 0.0% / unmatched 100.0% / decided 100 / denied 8); diagnosis caption
   reconciles the 100 non-matched conversions and the no-match-method note is
-  rendered; source-level guard that the consumer never reads raw/staging
-  relations.
-* README.md / docs/decisions.md  — streamlit consumer documents the four
-  analysis sections and the diagnostic intermediate view; ADR #8 records the
-  decision to allow the consumer to read int_unmatched_conversions as a
-  read-only diagnostic (never joined).
+  rendered; BOTH source bars render (asserts the marketing section emits two
+  Vega-Lite bars whose x-fields are exactly conversions and commission_gbp);
+  source-level guard that the consumer never reads raw/staging relations and
+  that intermediate.int_conversion_attribution is not read directly.
+* README.md / docs/decisions.md  — consumer docs updated: four sections with
+  the dual source bars, audit reconciliation sourced from mart_attribution_
+  health; ADR #8 states the only intermediate read is int_unmatched_conversions
+  and all other totals come from marts.mart_attribution_health.
 
 Acceptance verification (real executions)
 -----------------------------------------
 1. Warehouse built in the isolated worktree: ingestion + `dbt build`
    completed, PASS=74 WARN=0 ERROR=0 (4 table models, 64 data tests, 1 unit
-   test, 5 view models).
+   test, 5 view models) — after the rework commit.
 2. Real mart ground truth probed from the built warehouse:
    fct_revenue_attribution 92 rows; all match_status='unmatched'
    (85 active / 7 refunded; 8 denied excluded at revenue layer);
@@ -68,17 +79,42 @@ Acceptance verification (real executions)
    (100 unmatched / 0 matched / 0 ambiguous). int_unmatched_conversions 100:
    click_id_not_found 40, outside_posthog_sample_window 47,
    missing_click_id 13 (multiple_candidates 0, unknown 0).
-   mart_attribution_health sums 100/0/100/0/0/0/0 over 29 date groups.
+   mart_attribution_health sums total_conversions=100 / matched 0 /
+   unmatched 100 / ambiguous 0 over 29 date groups.
    fct_commission_daily_local sums to 92 conversions / GBP 1,001.70.
 3. Headless AppTest against the real warehouse (test_analysis_page.py):
-   4 passed; page renders all four sections with 0 exceptions and the KPIs
-   equal the probed mart totals (see assertions above).
-4. Hermetic helper tests (test_streamlit_analysis.py): 6 passed.
-5. Full regression suite: 35 passed (25 pre-existing + 6 helper + 4 AppTest).
+   5 passed after rework; page renders all four sections with 0 exceptions;
+   KPIs equal the probed mart totals; both source bars present with
+   conversions + commission_gbp x-fields.
+4. Hermetic helper tests (test_streamlit_analysis.py): 7 passed after rework
+   (incl. the new empty-relation test).
+5. Full regression suite: 37 passed (25 pre-existing + 7 helper + 5 AppTest).
 6. Real server: `streamlit run streamlit/app.py --server.headless true`
-   booted with the worktree warehouse; /_stcore/health returned 200.
+   booted with the worktree warehouse; /_stcore/health returned 200
+   (verified on the prior submission; chart layout change re-verified via
+   the AppTest render above).
 7. git diff --check clean; no raw/staging reads in the consumer (guard test
    + ADR #8 document the single intermediate diagnostic read).
+
+Rework round 1 (reviewer changes requested) — how each item was addressed
+--------------------------------------------------------------------------
+1. Empty-population NaN: `_unmatched_reason_counts` now computes the total
+   from the counts list and assigns 0.0 percent when the total is 0. New
+   hermetic test `test_unmatched_reason_counts_empty_relation_returns_zero_
+   percentages` deletes the diagnostic rows and asserts complete taxonomy +
+   all valid 0.0% (no NaN).
+2. Commission-by-source bar: marketing attribution now renders TWO side-by-
+   side horizontal bar charts — conversions by source (#1f77b4) and
+   commission by source (#ff7f0e) — above the audit table. New AppTest
+   `test_analysis_page_shows_both_source_bars` inspects the rendered
+   Vega-Lite specs and asserts exactly two source bars whose x-fields are
+   {"conversions", "commission_gbp"}.
+3. Intermediate access beyond ADR 8: the decided/denied audit totals are now
+   derived from marts.mart_attribution_health (sum of total_conversions)
+   instead of intermediate.int_conversion_attribution. The guard test now
+   asserts `intermediate.int_conversion_attribution` is NOT read; ADR 8 and
+   the README were updated to state the only intermediate read is the
+   diagnostic unmatched view.
 
 Notes
 -----
@@ -90,7 +126,8 @@ Notes
   click_id, so every conversion is unmatched and every reason bucket is
   explained by the diagnostic view. The UI is built so the same panels render
   meaningfully when a future sample does contain matches (zero-filled
-  vocabularies, empty-state notes, no hard-coded totals).
+  vocabularies, empty-state notes, guarded percentages, no hard-coded
+  totals).
 * The health mart and the diagnosis panel intentionally cover the full decided
   population (incl. denied) while the revenue KPIs cover the valid population;
   the audit strip reconciles 100 = 92 + 8 on the page itself.
