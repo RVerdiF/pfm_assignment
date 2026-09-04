@@ -1,0 +1,25 @@
+# Runtime dependencies for the Streamlit Community Cloud deploy.
+#
+# Community Cloud treats a root pyproject.toml as a Poetry manifest and runs
+# `poetry install`; this repository is a plain setuptools/PEP 621 project
+# (not a Poetry project, and not an installable package), so that path fails
+# with "The current project could not be installed: No file/folder found for
+# package pfm-assignment".
+#
+# Per Streamlit's dependency resolution, requirements.txt at the repository
+# root takes precedence over pyproject.toml, so this file is the single
+# source of truth for the deploy environment. Keep the versions aligned with
+# what is validated locally in a Python 3.11/3.12 virtualenv; the app also
+# hard-imports pandas (via polars/pyarrow interop in the analysis pages), so
+# pandas is listed explicitly.
+#
+# Generated from the validated local environment (2026-09-04).
+polars[excel]==1.44.1
+duckdb==1.5.5
+openpyxl==3.1.5
+fastexcel==0.21.0
+pyarrow==25.0.1
+pandas==2.2.3
+dbt-core==1.12.3
+dbt-duckdb==1.11.0
+streamlit==1.63.0
