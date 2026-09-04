@@ -207,3 +207,64 @@ Verification:
 * Real server boots with the worktree warehouse; /_stcore/health 200 and all
   three pages serve HTTP 200.
 * git diff --check clean.
+
+Rework round 3 (review gate — contract lens: Limitations live facts)
+---------------------------------------------------------------------
+Reviewer finding: the PFM_DUCKDB_PATH override still let the walkthrough
+contradict the warehouse it renders: methodology.py's Limitations list
+unconditionally rendered delivered-sample figures ("100 TrackNow conversions
+and 200 PostHog sessions", "Sessions start on 25 May while conversions start
+on 9 May"). A valid synthetic override (12 decided / 10 revenue rows, June
+data) showed those claims beside different results, and the override AppTest
+did not assert the Limitations body.
+
+Fix applied:
+* streamlit/sections/methodology.py
+    - Removed the static LIMITATIONS tuple with its fixed delivered-sample
+      numbers/dates.
+    - Added _limitation_notes(connection): the five limitation bullets are
+      now produced per render with warehouse-specific figures read live from
+      the same consumer relations as the rest of the page:
+        + Small sample — decided-conversion total and date span from
+          marts.mart_attribution_health (the full population, incl. denied),
+          revenue-valid count from marts.fct_revenue_attribution.
+        + Limited PostHog window — the outside_posthog_sample_window count
+          from intermediate.int_unmatched_conversions. The session-start
+          date is not exposed to the consumer contract, so the boundary is
+          stated structurally (orders before the earliest recorded session /
+          sessions after the order date) instead of a fixed calendar date.
+        + The other three limitations (conversion date-not-timestamp, no
+          authoritative daily commission source, no fuzzy rules) are
+          non-numeric pipeline/assignment properties and stay as stated.
+    - _limitations_section(connection) now renders _limitation_notes(); the
+      render() pipeline passes the connection.
+    - Module docstring updated: limitation figures read live from the health
+      mart (decided + span), revenue mart (valid count), and diagnostic view
+      (outside-window count).
+* tests/test_methodology_page.py
+    - Added _limitation_facts() and _assert_limitations_match_relations():
+      ground-truth queries over the same relations the bullets read
+      (health-mart decided total + date span, revenue-valid count,
+      outside-window count), then assert those exact live figures appear in
+      the rendered Limitations body — no fixed literals.
+    - test_methodology_prose_reconciles_with_live_marts now also asserts the
+      Limitations body reconciles to the real warehouse.
+    - test_methodology_narrative_renders_against_non_default_warehouse now
+      also asserts the Limitations body reconciles to the synthetic
+      warehouse (12/10/2 over 2026-06-01..2026-06-03) and that no
+      delivered-sample limitation claim leaks ("200 PostHog sessions",
+      "25 May", "9 May" absent).
+* README.md + docs/decisions.md (ADR 9 consequences) — documented that the
+  warehouse-specific limitation figures are read live from the same relations.
+
+Verification (round 3):
+* Full suite: 49 passed (12 pre-existing fetch_arrow_table() warnings).
+* Real warehouse renders live limitation figures: "100 conversions (of which
+  92 are revenue-valid) over the span 2026-05-09 to 2026-06-07" and "47
+  conversions fall outside ...". Synthetic override renders "12 conversions
+  (of which 10 are revenue-valid) ... 2026-06-01 to 2026-06-03" and "2
+  conversions fall outside ..." — no delivered-sample leakage.
+* Real server boots with the worktree warehouse; /_stcore/health 200 and all
+  three pages serve HTTP 200.
+* git diff --check clean.
+
