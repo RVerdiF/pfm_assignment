@@ -137,3 +137,35 @@ page zero-fills the full declared taxonomy). The audit trail remains intact:
 the view is a strict filtered projection of the attribution decision table.
 The intermediate-layer reading is narrow and documented so later consumers do
 not broaden it into business joins.
+
+---
+
+## 9. The walkthrough narrative is self-contained in the Streamlit pages
+
+**Context:** Card 3 turns the app into a final, self-contained delivery: an
+evaluator must understand the problem, the solution architecture, the
+method, the observed results, and the limitations *without* opening external
+documentation.
+
+**Decision:** The walkthrough lives in the Streamlit pages, as prose and
+light visuals around the same dbt-published relations the analysis page
+reads:
+
+- The Overview page states the problem, renders the real pipeline
+  architecture (`Excel sample -> Polars -> DuckDB raw -> dbt staging ->
+  dbt intermediate -> dbt marts -> Streamlit`) as a client-side graphviz
+  diagram plus one-line layer responsibilities, and confirms the read-only
+  marts connection.
+- The Methodology and limitations page explains the four deterministic rules
+  (exact click-id match, temporal window, identifier priority, recency
+  tie-break), the matched/ambiguous/unmatched outcomes, interprets the
+  observed results against live health-mart totals, and lists limitations and
+  recommendations.
+- Every analysis section opens with a prose reading of its numbers. No
+  attribution rule is re-implemented and no new intermediate read is added.
+
+**Consequences:** The app is a complete walkthrough with a clear heading
+hierarchy and short prose around each chart. The few narrative totals cited
+in prose (health-mart sums) are read live from the same dbt relations as the
+charts, so text cannot drift from data. Layer responsibilities and rule
+vocabulary are kept in sync with the dbt model headers and docs in this file.

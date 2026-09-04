@@ -1,0 +1,87 @@
+Evidence — Card 3 (t_485f334d) — Narrative, architecture and walkthrough completion
+Branch: wt/t_485f334d  (pushed to RVerdiF/pfm_assignment)
+Base:   origin/main 3a83509 (Card 2 merged via PR #18)
+
+Scope delivered (all criteria map to code under streamlit/ + tests + docs)
+--------------------------------------------------------------------------
+* streamlit/sections/overview.py  — first screen now explains the purpose:
+    - "The problem" prose kept and extended with a "Purpose of this
+      walkthrough" block (what / how / how much / what it means).
+    - Architecture: a real client-side graphviz diagram
+      (ARCHITECTURE_DOT, st.graphviz_chart — no server-side graphviz binary,
+      rendered by the browser) showing the exact pipeline
+      Excel sample -> Polars -> DuckDB raw -> dbt staging -> dbt intermediate
+      -> dbt marts -> Streamlit, plus ARCHITECTURE_LAYERS with one-line
+      responsibility per layer. Node labels match the real repo layout.
+* streamlit/sections/methodology.py  — final page replaces the Card-1
+  placeholder with four sections, all prose-first:
+    - Attribution method: the four deterministic rules in plain language
+      (1. exact match only, 2. temporal window, 3. identifier priority,
+      4. recency tie-break) + the matched/ambiguous/unmatched outcomes.
+      Vocabulary matches int_conversion_attribution.sql and winner_rules.yml.
+    - Interpreting the observed results: prose reading of the real sample
+      (0/100 matched, where loss occurs: 47 outside window / 40 not found /
+      13 missing click id, £1,001.70 fully unattributed) with a live caption
+      read from marts.mart_attribution_health so text cannot drift.
+    - Limitations: small sample, limited PostHog window, conversion date
+      without time, no authoritative daily commission, no fuzzy/undocumented
+      bridges.
+    - Recommendations: raise click-id coverage, propagate identifiers,
+      persist between session and conversion, widen + monitor the window.
+* streamlit/sections/analysis.py  — each of the four Card-2 sections now
+  opens with a textual interpretation (Reading the cards / Where the loss
+  happens / Reading the charts / Reading the chart) driven by the same
+  dbt relations the visuals use; the numbers are never hard-coded.
+* streamlit/sections/_components.py  — removed the now-dead
+  placeholder_section() helper (no caller remains).
+* docs/decisions.md — ADR #9: narrative self-contained in Streamlit pages;
+  layer responsibilities/rule vocabulary kept in sync with dbt headers.
+* README.md — walkthrough page narrative updated (architecture diagram +
+  prose readings + methodology page responsibilities).
+
+Tests (all hermetic or real-warehouse AppTest, no mock of the pipeline)
+------------------------------------------------------------------------
+* tests/_overview_driver.py + tests/_overview_page.py   — 3 AppTest render
+  checks against the REAL built worktree warehouse (PFM_DUCKDB_PATH): no
+  exception; title + three section headers; problem stated in prose; the
+  architecture diagram is rendered and its DOT payload carries every real
+  stage label (Ingestion (Polars), DuckDB raw, dbt staging, dbt
+  intermediate, dbt marts, Streamlit) so a stale diagram cannot pass.
+* tests/_methodology_driver.py + tests/_methodology_page.py — 4 AppTest
+  render checks: no exception; four section headers; method vocabulary
+  (Exact match only / Temporal window / Identifier priority / Recency
+  tie-break / matched / ambiguous / unmatched); prose interpretation of the
+  real sample; every limitation and recommendation listed; live health-mart
+  caption reconciles to the real totals (100 conversions, 0 matched,
+  100 unmatched).
+* Full suite: 45 passed (37 pre-existing + 3 overview + 4 methodology + 1
+  analysis-page guard already present). All AppTests use the real warehouse;
+  hermetic unit suites unchanged and green.
+
+Acceptance verification (real executions)
+-----------------------------------------
+1. Warehouse built in the isolated worktree: ingestion + `dbt build`
+   completed, PASS=74 WARN=0 ERROR=0 (4 table models, 64 data tests, 1 unit
+   test, 5 view models).
+2. Real server: `streamlit run streamlit/app.py --server.headless true` with
+   the worktree warehouse boots; /_stcore/health returned 200 "ok".
+3. All three pages serve over HTTP with the running app: overview -> 200,
+   analysis -> 200, methodology -> 200; AppTest renders show 0 exceptions.
+4. git diff --check clean.
+
+Notes
+-----
+* Board routing mismatch repeated: card workspace_path is a scratch dir under
+  the pfm_assignment board; per board precedent implementation lives in the
+  real repo /home/rafael/hermes/workspaces/pfm_assignment on an isolated
+  branch wt/t_485f334d stacked on origin/main (Card 2 merged).
+* The architecture graphviz is client-side (st.graphviz_chart); the module
+  only ships DOT text, so no server-side graphviz dependency is introduced.
+* All prose numbers come from the same dbt relations as the charts
+  (mart_attribution_health sums and the analysis helpers); the caption on the
+  methodology page reads the mart live on every render.
+* The sample remains 100% unmatched (0 matched / 92 valid-unattributed /
+  100 decided-unattributed per mart_attribution_health); the pages interpret
+  that honestly and are built so matched rows render meaningfully when a
+  future sample contains them (guards, empty-states, zero-filled
+  vocabularies already in place from Card 2).

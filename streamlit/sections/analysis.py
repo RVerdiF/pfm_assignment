@@ -97,6 +97,19 @@ def _render_overview(connection) -> None:
     )
     metrics = _overview_metrics(connection)
 
+    # What the evaluator should take away from the cards above: the sample is
+    # 100% unattributed, which the exact-only engine reports honestly.
+    if metrics["conversions"] and metrics["matched"] == 0:
+        st.write(
+            f"**Reading the cards.** This sample has {metrics['conversions']:,} "
+            "valid conversions and every one is unattributed: the matched "
+            "card shows 0 and the unmatched card shows the full population. "
+            "That is the exact-only engine refusing to invent a channel when "
+            "no TrackNow click id equals a PostHog identifier — the honest "
+            "result, not a missing step. The diagnosis section below explains "
+            "each of the reasons."
+        )
+
     columns = st.columns(5)
     columns[0].metric("Valid conversions", f"{metrics['conversions']:,}")
     columns[1].metric("Commission (GBP)", f"£{metrics['commission_gbp']:,.2f}")
@@ -200,6 +213,37 @@ def _render_unmatched_diagnosis(connection) -> None:
     )
     frame = _unmatched_reason_counts(connection)
 
+    total = int(frame["conversions"].sum())
+    # The interpretation is written in prose, not only shown as bars: the
+    # reasons are read straight from the same dbt view that feeds the chart.
+    if total:
+        counts = dict(
+            zip(frame["unmatched_reason"], frame["conversions"], strict=True)
+        )
+        outside = counts.get("outside_posthog_sample_window", 0)
+        not_found = counts.get("click_id_not_found", 0)
+        missing = counts.get("missing_click_id", 0)
+        st.write(
+            "**Where the loss happens.** The reasons map directly to "
+            "data-side gaps: **"
+            f"{outside:,}** conversions fall outside the PostHog sample "
+            "window (their orders predate the first session in the sample, "
+            "or the only sessions carrying their click id come after the "
+            "order date), **"
+            f"{not_found:,}** carry a click id that never appears in any "
+            "PostHog session, and "
+            f"**{missing:,}** have no click id at all and therefore cannot be "
+            "matched under an exact-only rule. Those are identifier-coverage "
+            "and sample-span gaps, not places where a better join would help."
+        )
+        if counts.get("multiple_candidates", 0) or counts.get("unknown", 0):
+            st.write(
+                "The remaining buckets (`multiple_candidates`, `unknown`) are "
+                "residual: the engine found candidates but could not "
+                "deterministically choose one session, or could not prove "
+                "temporal eligibility."
+            )
+
     chart_columns = st.columns([2, 1])
     with chart_columns[0]:
         st.bar_chart(
@@ -217,7 +261,7 @@ def _render_unmatched_diagnosis(connection) -> None:
             hide_index=True,
         )
     st.caption(
-        f"Total non-matched conversions: {frame['conversions'].sum():,}. "
+        f"Total non-matched conversions: {total:,}. "
         "Reasons are mutually exclusive; each conversion is counted once."
     )
 
@@ -279,6 +323,24 @@ def _render_marketing_attribution(connection) -> None:
         "information this pipeline trusts."
     )
     by_source = _marketing_attribution(connection)
+
+    # Interpretation before the bars: with no matched conversion every row is
+    # the explicit 'Unattributed' bucket, so no channel is ever implied.
+    if by_source["conversions"].sum() and "Unattributed" in set(
+        by_source["utm_source"]
+    ):
+        unattributed = int(
+            by_source.loc[by_source["utm_source"] == "Unattributed", "conversions"].sum()
+        )
+        if unattributed == by_source["conversions"].sum():
+            st.write(
+                "**Reading the charts.** Every conversion is in the "
+                "'Unattributed' bucket, so no channel can be read from this "
+                "sample. The pipeline refuses to infer a source: an "
+                "unmatched conversion carries no UTM data, and assigning it "
+                "to a channel would fabricate the very attribution this "
+                "exercise is meant to measure."
+            )
 
     # Visual requirement: bars for BOTH conversions and commission by source.
     # Two side-by-side horizontal bars keep each measure legible (a single
@@ -353,6 +415,25 @@ def _render_commission(connection) -> None:
         "falls into the unattributed bucket; no share is re-allocated to a "
         "channel without an exact match."
     )
+    # Interpretation in prose before the visual: this is the direct answer to
+    # "how does coverage affect reading revenue/commission by channel?".
+    if not commission.empty:
+        total_gbp = float(commission["commission_gbp"].sum())
+        unattributed_rows = commission[
+            commission["attribution_status"] == "Unattributed"
+        ]
+        if len(unattributed_rows) == 1 and float(
+            unattributed_rows["commission_gbp"].iloc[0]
+        ) == total_gbp:
+            st.write(
+                f"**Reading the chart.** The full **£{total_gbp:,.2f}** of "
+                "commission sits in the unattributed bucket. Splitting that "
+                "amount across channels without an exact match would invent a "
+                "distribution; the chart keeps it whole and labelled, which "
+                "is the only defensible reading for this sample. A future "
+                "sample with matched conversions will populate the attributed "
+                "side of this same chart automatically."
+            )
     chart_columns = st.columns([2, 1])
     with chart_columns[0]:
         if not commission.empty:

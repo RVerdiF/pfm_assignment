@@ -202,6 +202,9 @@ location.
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
 `Methodology and limitations`) that read only published dbt relations:
 
+- the Overview page explains the assignment problem in prose, renders the
+  real pipeline architecture as a diagram with one responsibility per layer,
+  and confirms the read-only marts connection;
 - `marts.fct_revenue_attribution` for valid-conversion revenue, commission,
   match status, and UTM breakdowns;
 - `intermediate.int_unmatched_conversions` (a dbt diagnostic view, read for
@@ -209,7 +212,12 @@ The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
   "why conversions are not attributed" audit panel;
 - `marts.mart_attribution_health` for daily/source attribution monitoring;
 - `marts.fct_commission_daily_local` for the clearly labelled local commission
-  proxy.
+  proxy;
+- the Methodology and limitations page states the deterministic attribution
+  rules in plain language (exact click-id matching, temporal window,
+  identifier priority, recency tie-break, and the matched / ambiguous /
+  unmatched outcomes), interprets the observed results with live health-mart
+  totals, and lists the sample's limitations and the recommendations.
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads
@@ -217,9 +225,11 @@ and unmatched rates (the decided/denied audit reconciliation reads
 table with the full dbt taxonomy zero-filled), marketing attribution by UTM
 source and by exact match method — with side-by-side bar charts for both
 conversions and commission by source — and revenue/commission with the daily
-proxy kept as an explicit complement. It does not query raw or staging
-relations and does not perform attribution joins in Python; its only
-intermediate-layer read is the diagnostic `int_unmatched_conversions` view.
+proxy kept as an explicit complement. Every section opens with a short prose
+reading of the numbers so the page tells the story rather than showing raw
+charts. The app does not query raw or staging relations and does not perform
+attribution joins in Python; its only intermediate-layer read is the
+diagnostic `int_unmatched_conversions` view.
 
 ## BigQuery consumption asset
 

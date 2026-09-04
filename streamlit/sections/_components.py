@@ -30,15 +30,3 @@ def warehouse_readiness_banner(connection) -> None:
         f"Connected read-only to the local warehouse. "
         f"{rows[0] if rows else 0} relation(s) in the {MART_SCHEMA} schema."
     )
-
-
-def placeholder_section(title: str, purpose: str) -> None:
-    """Render a clearly-labelled placeholder for a walkthrough section.
-
-    Card 1 establishes the navigation skeleton; the walkthrough narrative is
-    completed in later passes. The placeholder states the section's purpose so
-    the final deliverable remains coherent while pages are built out.
-    """
-    st.header(title)
-    st.write(purpose)
-    st.caption("This part of the walkthrough is completed in the build-out.")
