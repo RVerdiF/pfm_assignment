@@ -1,8 +1,58 @@
 Evidence — Card 3 (t_485f334d) — Narrative, architecture and walkthrough completion
 Branch: wt/t_485f334d  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main 3a83509 (Card 2 merged via PR #18)
-Commit: 5d0e617 feat(streamlit): complete walkthrough narrative, architecture
-        and methodology (Card 3)
+Commits:
+  5d0e617 feat(streamlit): complete walkthrough narrative, architecture
+          and methodology (Card 3)
+  f3b97c8 docs(streamlit): pin Card 3 commit SHA in evidence file
+  296035e fix(streamlit): derive methodology narrative numbers live (rework)
+
+Rework round (review gate — data/reporting correctness)
+-------------------------------------------------------
+Reviewer finding: streamlit/sections/methodology.py hard-coded every reported
+result (100/0/100, 92, £1,001.70, the 13/40/47 loss breakdown) in
+RESULT_INTERPRETATIONS, contradicting the module contract and the documented
+PFM_DUCKDB_PATH existing-warehouse override, for which a warehouse with
+different totals would make the live caption and the narrative disagree.
+
+Fix applied:
+* streamlit/sections/methodology.py
+    - Removed the hard-coded RESULT_INTERPRETATIONS and RECOMMENDATIONS
+      tuples.
+    - Added _read_narrative_facts(connection): one read of the same three
+      dbt relations the analysis page charts — marts.mart_attribution_health
+      (decided/match-status sums), marts.fct_revenue_attribution (valid
+      conversions and commission), and intermediate.int_unmatched_conversions
+      (loss-cause reason counts, the ADR-8 diagnostic view).
+    - _build_result_interpretations(facts) renders each interpretation only
+      when the live numbers make it true (an all-unmatched warehouse gets the
+      full reading; a warehouse with matches does not claim the opposite) and
+      quotes the live decided/valid/commission/reason counts.
+    - Recommendations now append their loss-cause counts as live tails ("In
+      this sample, N conversions ...") only when that cause is present.
+    - render() reads the facts once and passes them to the results and
+      recommendations sections, so every number cited on the page is
+      internally consistent within a render and can never drift from the
+      warehouse it is served against.
+* README.md + docs/decisions.md (ADR 9 consequences)
+    - Document that every narrative quantity (health-mart sums, revenue-valid
+      conversions/commission, loss-cause reason counts) is read live from the
+      same dbt relations as the charts, so the PFM_DUCKDB_PATH override can
+      never be contradicted by the walkthrough.
+* tests/test_methodology_page.py
+    - Added reconciliation tests whose expected values are read from the same
+      relations (never hard-coded):
+        * test_methodology_prose_reconciles_with_live_marts — the default
+          real warehouse: caption + prose must equal the health-mart sums,
+          revenue-valid totals/commission, and the reason taxonomy.
+        * test_methodology_narrative_renders_against_non_default_warehouse —
+          regression with a *different valid warehouse* (12 decided, 3
+          matched, 4/3/2 loss reasons, £270.75 commission) via
+          PFM_DUCKDB_PATH; proves the narrative switches to those live totals
+          and never leaks the delivered-sample claims (no "£1,001.70", no
+          "100 conversions"). Requires clearing st.cache_resource between
+          AppTest runs so the override path is actually re-resolved.
+    - The method/limitations structural checks are unchanged.
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
@@ -23,13 +73,15 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
       Vocabulary matches int_conversion_attribution.sql and winner_rules.yml.
     - Interpreting the observed results: prose reading of the real sample
       (0/100 matched, where loss occurs: 47 outside window / 40 not found /
-      13 missing click id, £1,001.70 fully unattributed) with a live caption
-      read from marts.mart_attribution_health so text cannot drift.
+      13 missing click id, £1,001.70 fully unattributed), every number read
+      live from marts.mart_attribution_health, marts.fct_revenue_attribution
+      and intermediate.int_unmatched_conversions so text cannot drift.
     - Limitations: small sample, limited PostHog window, conversion date
       without time, no authoritative daily commission, no fuzzy/undocumented
       bridges.
     - Recommendations: raise click-id coverage, propagate identifiers,
-      persist between session and conversion, widen + monitor the window.
+      persist between session and conversion, widen + monitor the window;
+      each cites the live loss cause it addresses.
 * streamlit/sections/analysis.py  — each of the four Card-2 sections now
   opens with a textual interpretation (Reading the cards / Where the loss
   happens / Reading the charts / Reading the chart) driven by the same
@@ -49,16 +101,14 @@ Tests (all hermetic or real-warehouse AppTest, no mock of the pipeline)
   architecture diagram is rendered and its DOT payload carries every real
   stage label (Ingestion (Polars), DuckDB raw, dbt staging, dbt
   intermediate, dbt marts, Streamlit) so a stale diagram cannot pass.
-* tests/_methodology_driver.py + tests/_methodology_page.py — 4 AppTest
-  render checks: no exception; four section headers; method vocabulary
-  (Exact match only / Temporal window / Identifier priority / Recency
-  tie-break / matched / ambiguous / unmatched); prose interpretation of the
-  real sample; every limitation and recommendation listed; live health-mart
-  caption reconciles to the real totals (100 conversions, 0 matched,
-  100 unmatched).
-* Full suite: 45 passed (37 pre-existing + 3 overview + 4 methodology + 1
-  analysis-page guard already present). All AppTests use the real warehouse;
-  hermetic unit suites unchanged and green.
+* tests/_methodology_driver.py + tests/_methodology_page.py — AppTest render
+  checks: no exception; four section headers; method vocabulary (Exact match
+  only / Temporal window / Identifier priority / Recency tie-break /
+  matched / ambiguous / unmatched); every limitation and recommendation
+  listed; narrative reconciliation against the real marts; and the
+  non-default PFM_DUCKDB_PATH regression proving the narrative switches to
+  that warehouse's totals.
+* Full suite: 45 passed (37 pre-existing + 3 overview + 5 methodology).
 
 Acceptance verification (real executions)
 -----------------------------------------
@@ -70,6 +120,9 @@ Acceptance verification (real executions)
 3. All three pages serve over HTTP with the running app: overview -> 200,
    analysis -> 200, methodology -> 200; AppTest renders show 0 exceptions.
 4. git diff --check clean.
+5. Reconcile-then-override regression: narrative rendered against a synthetic
+   non-default warehouse (PFM_DUCKDB_PATH) reflects 12/3/7/2 and £270.75,
+   not the delivered-sample totals.
 
 Notes
 -----
@@ -80,8 +133,9 @@ Notes
 * The architecture graphviz is client-side (st.graphviz_chart); the module
   only ships DOT text, so no server-side graphviz dependency is introduced.
 * All prose numbers come from the same dbt relations as the charts
-  (mart_attribution_health sums and the analysis helpers); the caption on the
-  methodology page reads the mart live on every render.
+  (mart_attribution_health sums, fct_revenue_attribution, and the
+  int_unmatched_conversions diagnostic view); a page rendered against a
+  different valid warehouse always reads that warehouse's own totals.
 * The sample remains 100% unmatched (0 matched / 92 valid-unattributed /
   100 decided-unattributed per mart_attribution_health); the pages interpret
   that honestly and are built so matched rows render meaningfully when a
