@@ -1,0 +1,104 @@
+version: 2
+
+unit_tests:
+  - name: int_conversion_attribution_winner_rules
+    description: >-
+      Synthetic cases assert typed identifier priority, most recent typed
+      session selection, and NULL session fields for non-matches.
+    model: int_conversion_attribution
+    given:
+      - input: ref("int_tracknow_attribution_candidates")
+        rows:
+          - conversion_id: conversion-typed-priority
+            conversion_date: "2024-01-10"
+            click_id: click-typed-priority
+            affiliate_session_id: null
+            tracknow_user_id: null
+            has_click_id: true
+            has_affiliate_session_id: false
+            has_tracknow_user_id: false
+          - conversion_id: conversion-recency
+            conversion_date: "2024-01-10"
+            click_id: click-recency
+            affiliate_session_id: null
+            tracknow_user_id: null
+            has_click_id: true
+            has_affiliate_session_id: false
+            has_tracknow_user_id: false
+          - conversion_id: conversion-unmatched
+            conversion_date: "2024-01-10"
+            click_id: click-not-present
+            affiliate_session_id: null
+            tracknow_user_id: null
+            has_click_id: true
+            has_affiliate_session_id: false
+            has_tracknow_user_id: false
+      - input: ref("int_posthog_attribution_candidates")
+        rows:
+          - session_id: session-typed
+            identifier_type: gclid
+            identifier_value: click-typed-priority
+          - session_id: session-generic
+            identifier_type: click_id_from_url
+            identifier_value: click-typed-priority
+          - session_id: session-old
+            identifier_type: gclid
+            identifier_value: click-recency
+          - session_id: session-new
+            identifier_type: fbclid
+            identifier_value: click-recency
+      - input: ref("stg_posthog_sessions")
+        rows:
+          - session_id: session-typed
+            session_date: "2024-01-09"
+            session_start_at: "2024-01-09 08:00:00+00:00"
+          - session_id: session-generic
+            session_date: "2024-01-10"
+            session_start_at: "2024-01-10 18:00:00+00:00"
+          - session_id: session-old
+            session_date: "2024-01-08"
+            session_start_at: "2024-01-08 08:00:00+00:00"
+          - session_id: session-new
+            session_date: "2024-01-10"
+            session_start_at: "2024-01-10 09:00:00+00:00"
+    expect:
+      rows:
+        - conversion_id: conversion-typed-priority
+          conversion_date: "2024-01-10"
+          click_id: click-typed-priority
+          affiliate_session_id: null
+          tracknow_user_id: null
+          has_click_id: true
+          has_affiliate_session_id: false
+          has_tracknow_user_id: false
+          attribution_status: matched
+          attribution_session_id: session-typed
+          attribution_session_date: "2024-01-09"
+          attribution_session_start_at: "2024-01-09 08:00:00+00:00"
+          attribution_identifier_type: gclid
+        - conversion_id: conversion-recency
+          conversion_date: "2024-01-10"
+          click_id: click-recency
+          affiliate_session_id: null
+          tracknow_user_id: null
+          has_click_id: true
+          has_affiliate_session_id: false
+          has_tracknow_user_id: false
+          attribution_status: matched
+          attribution_session_id: session-new
+          attribution_session_date: "2024-01-10"
+          attribution_session_start_at: "2024-01-10 09:00:00+00:00"
+          attribution_identifier_type: fbclid
+        - conversion_id: conversion-unmatched
+          conversion_date: "2024-01-10"
+          click_id: click-not-present
+          affiliate_session_id: null
+          tracknow_user_id: null
+          has_click_id: true
+          has_affiliate_session_id: false
+          has_tracknow_user_id: false
+          attribution_status: unmatched
+          attribution_session_id: null
+          attribution_session_date: null
+          attribution_session_start_at: null
+          attribution_identifier_type: null
