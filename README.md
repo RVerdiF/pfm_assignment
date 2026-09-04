@@ -201,6 +201,40 @@ the required relations (the three marts **and** the diagnostic
 the default project warehouse only, because the ingestion script and dbt
 profile are wired to that location.
 
+### Deploying on Streamlit Community Cloud
+
+Community Cloud treats a root `pyproject.toml` as a **Poetry** manifest and
+runs `poetry install`. This repository is a plain setuptools/PEP 621 project
+— it is not a Poetry project and not an installable package — so that path
+fails with:
+
+```text
+The current project could not be installed: No file/folder found for
+package pfm-assignment
+```
+
+The fix is the **fallback explicitly preferred for the deploy**: the app is
+installed from the root `requirements.txt`, which Community Cloud resolves
+*before* `pyproject.toml`. `pyproject.toml` remains the single manifest for
+local development (`pip install -e ".[consumer,dev]"`); `requirements.txt`
+is the single dependency file for the deploy environment, so the two never
+compete.
+
+```text
+requirements.txt   <- Community Cloud installs the app from this file
+pyproject.toml     <- local development only (kept, never used by the deploy)
+```
+
+Set the app's Python version to **3.12** (Community Cloud's default, and the
+version the pinned dependencies are validated against) in the deploy's
+*Advanced settings*. Do not use Python 3.14: not every pinned dependency
+ships a wheel for it yet, so the build would try to compile from source.
+
+On first boot the app finds no `warehouse/pfm.duckdb` and no local dbt
+profile, runs the canonical bootstrap (ingestion, then `dbt build` with the
+profile created from `dbt/profiles.yml.example`), and then serves the
+walkthrough pages — see the reproducible-bootstrap section above.
+
 ### Pages and relations
 
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
@@ -276,6 +310,8 @@ dbt/models/marts/                  Consumer-facing tables
 dbt/tests/                         Singular tests (data contracts and invariants)
 notebooks/01_data_exploration.ipynb  Pre-modeling EDA
 notebooks/README.md                How to run the EDA and what it found
+requirements.txt                   Pinned runtime deps for the Community Cloud deploy
+pyproject.toml                     Project manifest for local development (PEP 621)
 docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/attribution_health.sql  BigQuery mart consumption query
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
