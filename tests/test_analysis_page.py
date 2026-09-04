@@ -10,6 +10,7 @@ the numbers shown come from the dbt marts and reconcile to them.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -22,6 +23,11 @@ def _render() -> AppTest:
     at = AppTest.from_file(str(DRIVER), default_timeout=60)
     at.run()
     return at
+
+
+def _chart_specs(at: AppTest) -> list[dict]:
+    """Return the Vega-Lite spec dicts of every chart rendered on the page."""
+    return [json.loads(chart.proto.spec) for chart in at.get("vega_lite_chart")]
 
 
 def test_analysis_page_renders_with_real_warehouse() -> None:
@@ -63,9 +69,27 @@ def test_analysis_page_diagnosis_shows_reason_breakdown() -> None:
     assert "No conversions were matched in this sample" in body_text
 
 
+def test_analysis_page_shows_both_source_bars() -> None:
+    """Marketing attribution renders bars for conversions AND commission."""
+    at = _render()
+    assert not at.exception, at.exception
+    specs = _chart_specs(at)
+    source_bars = [
+        spec
+        for spec in specs
+        if spec.get("encoding", {}).get("y", {}).get("field") == "utm_source"
+    ]
+    assert len(source_bars) == 2, "expected conversions + commission source bars"
+    x_fields = {spec["encoding"]["x"]["field"] for spec in source_bars}
+    assert x_fields == {"conversions", "commission_gbp"}
+
+
 def test_analysis_page_has_no_reimplemented_join() -> None:
     """The consumer must never read raw/staging relations directly."""
     source = (ROOT / "streamlit" / "sections" / "analysis.py").read_text()
     assert "raw." not in source
     assert "staging." not in source
+    # ADR 8: the only intermediate read is the pre-computed unmatched_reason
+    # diagnostic view. Decided totals come from marts.mart_attribution_health.
+    assert "intermediate.int_conversion_attribution" not in source
     assert "intermediate.int_unmatched_conversions" in source

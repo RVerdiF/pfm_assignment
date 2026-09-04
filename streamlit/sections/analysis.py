@@ -7,7 +7,8 @@ marts only:
 - Why conversions are not attributed: the ``unmatched_reason`` taxonomy from
   the ``intermediate.int_unmatched_conversions`` diagnostic view.
 - Marketing attribution by UTM source and match method (gclid / fbclid / URL
-  click id). No channel is inferred for unmatched conversions.
+  click id). No channel is inferred for unmatched conversions. Conversions and
+  commission are both broken down by source in side-by-side bar charts.
 - Revenue and commission: totals over the valid population, attributed vs
   unattributed, breakdown by source when attribution exists, and the local
   daily commission proxy as a clearly-labelled complement.
@@ -120,10 +121,15 @@ def _render_overview(connection) -> None:
     # the audit view. Both totals are read from dbt relations and should line
     # up as 100 = 92 + 8; showing them side by side makes the audit trail
     # explicit and lets an evaluator reconcile the overview numbers with the
-    # diagnosis tables.
+    # diagnosis tables. The decided total comes from the health mart
+    # (marts.mart_attribution_health), which publishes the full decided
+    # population — including denied rows — without reading the intermediate
+    # attribution table directly (ADR 8 keeps intermediate reads limited to
+    # the pre-computed unmatched_reason diagnostic view).
     decided = int(
         connection.execute(
-            "select count(*) from intermediate.int_conversion_attribution"
+            "select coalesce(sum(total_conversions), 0) "
+            "from marts.mart_attribution_health"
         ).fetchone()[0]
     )
     denied = decided - metrics["conversions"]
@@ -132,7 +138,7 @@ def _render_overview(connection) -> None:
         "Decided conversions (all)",
         f"{decided:,}",
         help="Every conversion the attribution engine decided over, including "
-        "denied ones (intermediate.int_conversion_attribution).",
+        "denied ones (marts.mart_attribution_health).",
     )
     audit_columns[1].metric(
         "Denied (excluded from revenue)",
@@ -141,7 +147,7 @@ def _render_overview(connection) -> None:
     )
     audit_columns[2].caption(
         f"Valid {metrics['conversions']:,} + denied {denied:,} = decided "
-        f"{decided:,} — reconciled from the attribution table."
+        f"{decided:,} — reconciled from the health mart."
     )
 
     with st.expander("Detailed mart rows (audit)"):
@@ -176,7 +182,10 @@ def _unmatched_reason_counts(connection) -> pd.DataFrame:
     reason_rows = by_reason.set_index("unmatched_reason")["conversions"].to_dict()
     counts = [int(reason_rows.get(reason, 0)) for reason in UNMATCHED_REASONS]
     frame = pd.DataFrame({"unmatched_reason": list(UNMATCHED_REASONS), "conversions": counts})
-    frame["percent"] = frame["conversions"] / frame["conversions"].sum() * 100
+    # Empty population (an all-matched warehouse has zero non-matched rows):
+    # every reason percentage must render as a valid 0.0 rather than NaN (0/0).
+    total = sum(counts)
+    frame["percent"] = frame["conversions"] / total * 100 if total else 0.0
     return frame
 
 
@@ -271,8 +280,13 @@ def _render_marketing_attribution(connection) -> None:
     )
     by_source = _marketing_attribution(connection)
 
-    chart_columns = st.columns([2, 1])
+    # Visual requirement: bars for BOTH conversions and commission by source.
+    # Two side-by-side horizontal bars keep each measure legible (a single
+    # grouped chart with mixed scales would bury the £ amounts next to large
+    # conversion counts); the audit table below carries both columns verbatim.
+    chart_columns = st.columns(2)
     with chart_columns[0]:
+        st.caption("Conversions by source")
         if not by_source.empty:
             st.bar_chart(
                 by_source,
@@ -282,12 +296,21 @@ def _render_marketing_attribution(connection) -> None:
                 horizontal=True,
             )
     with chart_columns[1]:
-        st.dataframe(
-            by_source.style.format(
-                {"conversions": "{:,.0f}", "commission_gbp": "£{:,.2f}"}
-            ),
-            hide_index=True,
-        )
+        st.caption("Commission by source")
+        if not by_source.empty:
+            st.bar_chart(
+                by_source,
+                x="utm_source",
+                y="commission_gbp",
+                color="#ff7f0e",
+                horizontal=True,
+            )
+    st.dataframe(
+        by_source.style.format(
+            {"conversions": "{:,.0f}", "commission_gbp": "£{:,.2f}"}
+        ),
+        hide_index=True,
+    )
 
     method_frame = _match_method_counts(connection)
     st.caption(

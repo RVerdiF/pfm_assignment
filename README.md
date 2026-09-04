@@ -212,11 +212,14 @@ The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
   proxy.
 
 The analysis page presents four sections: an attribution overview with match
-and unmatched rates, the unmatched-reason diagnosis (bar chart + table with
-the full dbt taxonomy zero-filled), marketing attribution by UTM source and by
-exact match method, and revenue/commission with the daily proxy kept as an
-explicit complement. It does not query raw or staging relations and does not
-perform attribution joins in Python.
+and unmatched rates (the decided/denied audit reconciliation reads
+`marts.mart_attribution_health`), the unmatched-reason diagnosis (bar chart +
+table with the full dbt taxonomy zero-filled), marketing attribution by UTM
+source and by exact match method — with side-by-side bar charts for both
+conversions and commission by source — and revenue/commission with the daily
+proxy kept as an explicit complement. It does not query raw or staging
+relations and does not perform attribution joins in Python; its only
+intermediate-layer read is the diagnostic `int_unmatched_conversions` view.
 
 ## BigQuery consumption asset
 

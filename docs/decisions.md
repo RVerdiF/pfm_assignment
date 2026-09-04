@@ -127,7 +127,9 @@ as a read-only diagnostic relation — an aggregate over its pre-computed
 `unmatched_reason` column only, never a join. It remains forbidden from
 reading raw/staging relations and from re-implementing attribution rules. The
 intermediate relation is materialized as a dbt view, so it always mirrors the
-latest attribution table.
+latest attribution table. All other aggregate totals the page needs (decided
+conversions including denied rows, match status, daily/source health) are
+published by `marts.mart_attribution_health` and read from that mart.
 
 **Consequences:** The diagnosis panel reconciles with
 `int_conversion_attribution` by construction and stays vocabulary-stable (the

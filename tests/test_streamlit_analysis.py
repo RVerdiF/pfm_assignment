@@ -72,11 +72,16 @@ def connection(tmp_path: Path) -> duckdb.DuckDBPyConnection:
 
     con.execute(
         """
-        create table intermediate.int_conversion_attribution as
+        create table marts.mart_attribution_health as
         select * from (values
-            ('c1', 'unmatched'), ('c2', 'matched'), ('c3', 'ambiguous'),
-            ('c4', 'matched'), ('c5', 'unmatched')
-        ) as t(conversion_id, attribution_status)
+            (date '2026-05-09', 'google',   1, 1, 0, 0),
+            (date '2026-05-09', null,       2, 0, 2, 0),
+            (date '2026-05-10', 'facebook', 1, 1, 0, 0),
+            (date '2026-05-10', null,       1, 0, 0, 1)
+        ) as t(
+            conversion_date, utm_source, total_conversions,
+            matched_conversions, unmatched_conversions, ambiguous_conversions
+        )
         """
     )
 
@@ -123,6 +128,24 @@ def test_unmatched_reason_percentages_reconcile_to_100(connection) -> None:
     frame = analysis._unmatched_reason_counts(connection)
     assert frame["conversions"].sum() == 3
     assert frame["percent"].sum() == pytest.approx(100.0)
+
+
+def test_unmatched_reason_counts_empty_relation_returns_zero_percentages(
+    connection,
+) -> None:
+    """An all-matched warehouse has an empty int_unmatched_conversions view.
+
+    The diagnosis must still render a complete taxonomy with valid 0.0%
+    percentages — never NaN from a 0/0 division and never a silently dropped
+    reason vocabulary.
+    """
+    connection.execute("delete from intermediate.int_unmatched_conversions")
+    frame = analysis._unmatched_reason_counts(connection)
+    assert set(frame["unmatched_reason"]) == set(analysis.UNMATCHED_REASONS)
+    assert frame["conversions"].sum() == 0
+    assert frame["percent"].sum() == pytest.approx(0.0)
+    assert frame["percent"].notna().all()
+    assert (frame["percent"] == 0.0).all()
 
 
 def test_match_method_counts_zero_fill_entire_vocabulary(connection) -> None:
