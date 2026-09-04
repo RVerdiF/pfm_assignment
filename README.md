@@ -216,8 +216,10 @@ The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
 - the Methodology and limitations page states the deterministic attribution
   rules in plain language (exact click-id matching, temporal window,
   identifier priority, recency tie-break, and the matched / ambiguous /
-  unmatched outcomes), interprets the observed results with live health-mart
-  totals, and lists the sample's limitations and the recommendations.
+  unmatched outcomes), interprets the observed results with totals read live
+  from the health mart, the revenue mart, and the diagnostic reason view, and
+  lists the sample's limitations and the recommendations (each citing the
+  live loss cause it addresses).
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads

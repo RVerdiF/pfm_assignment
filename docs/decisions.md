@@ -159,13 +159,16 @@ reads:
 - The Methodology and limitations page explains the four deterministic rules
   (exact click-id match, temporal window, identifier priority, recency
   tie-break), the matched/ambiguous/unmatched outcomes, interprets the
-  observed results against live health-mart totals, and lists limitations and
-  recommendations.
+  observed results, and lists limitations and recommendations.
 - Every analysis section opens with a prose reading of its numbers. No
   attribution rule is re-implemented and no new intermediate read is added.
 
 **Consequences:** The app is a complete walkthrough with a clear heading
-hierarchy and short prose around each chart. The few narrative totals cited
-in prose (health-mart sums) are read live from the same dbt relations as the
-charts, so text cannot drift from data. Layer responsibilities and rule
+hierarchy and short prose around each chart. Every narrative quantity cited
+in prose — health-mart sums, revenue-valid conversions and commission, and
+the loss-cause reason counts — is read live from the same dbt relations as
+the charts (the health mart, the revenue mart, and the pre-computed
+`int_unmatched_conversions` diagnostic view), so text cannot drift from data
+and a different valid warehouse via the documented `PFM_DUCKDB_PATH` override
+is never contradicted by the walkthrough. Layer responsibilities and rule
 vocabulary are kept in sync with the dbt model headers and docs in this file.
