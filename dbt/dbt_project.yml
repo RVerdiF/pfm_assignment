@@ -1,0 +1,27 @@
+name: pfm_assignment
+version: "1.0.0"
+config-version: 2
+
+profile: pfm_assignment
+
+model-paths: [models]
+test-paths: [tests]
+macro-paths: [macros]
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  pfm_assignment:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+      attribution:
+        int_conversion_attribution:
+          +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
