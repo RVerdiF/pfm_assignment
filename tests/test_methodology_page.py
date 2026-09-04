@@ -242,7 +242,47 @@ def test_methodology_narrative_renders_against_non_default_warehouse(
         wb.get_warehouse_connection.clear()
 
 
-def _build_synthetic_warehouse(path: Path) -> None:
+def test_methodology_override_missing_diagnostic_view_fails_at_bootstrap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Regression: a marts-only override must fail startup, not render.
+
+    The old readiness contract validated only the three marts, so a custom
+    warehouse satisfying it passed bootstrap and then crashed when the
+    methodology page queried intermediate.int_unmatched_conversions. The
+    page must instead fail cleanly before rendering: the connection accessor
+    renders the readable bootstrap error and stops the page (no exception
+    propagates out of AppTest).
+    """
+    synthetic = tmp_path / "pfm.duckdb"
+    # All three marts present, diagnostic view deliberately absent.
+    _build_synthetic_warehouse(synthetic, include_diagnostic_view=False)
+
+    monkeypatch.setenv("PFM_DUCKDB_PATH", str(synthetic))
+    wb.get_warehouse_connection.clear()
+    try:
+        at = _render()
+        # The page should stop cleanly after rendering the bootstrap error;
+        # a render-time crash would surface as at.exception.
+        assert not at.exception, at.exception
+        # require_connection() stops the page before any section renders: the
+        # "Methodology and limitations" intro header appears but no method /
+        # results / recommendations sections follow.
+        assert all(
+            h.value != "Attribution method"
+            for h in at.subheader
+        )
+        # The readable error names the missing diagnostic view (the accessor
+        # renders a short st.error and the detailed PipelineError in st.code).
+        error_text = " ".join(str(e.value) for e in at.error)
+        code_text = " ".join(str(c.value) for c in at.code)
+        assert "The warehouse could not be prepared." in error_text
+        assert "int_unmatched_conversions" in error_text + code_text
+    finally:
+        wb.get_warehouse_connection.clear()
+
+
+def _build_synthetic_warehouse(path: Path, *, include_diagnostic_view: bool = True) -> None:
     """Create a minimal-but-valid warehouse with non-default attribution totals.
 
     Schema mirrors the relations the methodology page reads (the three
@@ -253,6 +293,11 @@ def _build_synthetic_warehouse(path: Path) -> None:
     revenue-valid rows with a distinct commission total. Note the revenue mart
     keeps only the revenue-valid population (here 10 of the 12 decided rows:
     3 matched + 5 unmatched + 2 ambiguous); the health mart counts all 12.
+
+    ``include_diagnostic_view=False`` builds a warehouse that provides all
+    three marts but omits the ADR-8 diagnostic view — the exact shape the old
+    (marts-only) readiness contract accepted and that used to crash at render
+    time.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     con = duckdb.connect(str(path))
@@ -303,18 +348,19 @@ def _build_synthetic_warehouse(path: Path) -> None:
             "commission_gbp double, sales_amount_gbp double)"
         )
 
-        con.execute(
-            "create table intermediate.int_unmatched_conversions ("
-            "conversion_id varchar, unmatched_reason varchar)"
-        )
-        con.execute(
-            "insert into intermediate.int_unmatched_conversions values "
-            "('u1', 'missing_click_id'), ('u2', 'missing_click_id'), "
-            "('u3', 'missing_click_id'), ('u4', 'missing_click_id'), "
-            "('u5', 'click_id_not_found'), ('a1', 'click_id_not_found'), "
-            "('a2', 'click_id_not_found'), "
-            "('x1', 'outside_posthog_sample_window'), "
-            "('x2', 'outside_posthog_sample_window')"
-        )
+        if include_diagnostic_view:
+            con.execute(
+                "create table intermediate.int_unmatched_conversions ("
+                "conversion_id varchar, unmatched_reason varchar)"
+            )
+            con.execute(
+                "insert into intermediate.int_unmatched_conversions values "
+                "('u1', 'missing_click_id'), ('u2', 'missing_click_id'), "
+                "('u3', 'missing_click_id'), ('u4', 'missing_click_id'), "
+                "('u5', 'click_id_not_found'), ('a1', 'click_id_not_found'), "
+                "('a2', 'click_id_not_found'), "
+                "('x1', 'outside_posthog_sample_window'), "
+                "('x2', 'outside_posthog_sample_window')"
+            )
     finally:
         con.close()

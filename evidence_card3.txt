@@ -141,3 +141,70 @@ Notes
   that honestly and are built so matched rows render meaningfully when a
   future sample contains them (guards, empty-states, zero-filled
   vocabularies already in place from Card 2).
+
+Rework round 2 (review gate — execution lens: architecture truthfulness +
+required-relation contract)
+-------------------------------------------------------------------------------
+Reviewer finding (round 2): (1) the Overview architecture narrative claimed
+Streamlit "only reads the published marts" while the app actually queries
+intermediate.int_unmatched_conversions; (2) the PFM_DUCKDB_PATH readiness
+contract validated only the three marts, so a marts-only custom warehouse
+passed bootstrap and crashed at render time.
+
+Fix applied:
+* streamlit/warehouse_bootstrap.py — centralized the required-relation
+  contract.
+    - Added EXPECTED_INTERMEDIATE_VIEWS = ("int_unmatched_conversions",) and
+      INTERMEDIATE_SCHEMA; REQUIRED_RELATIONS now lists every relation the
+      walkthrough reads as (schema, table): the three marts plus the ADR-8
+      diagnostic view.
+    - Renamed required_marts_present() -> required_relations_present() and
+      _missing_marts() -> _missing_relations(); both now check the full
+      contract (marts + diagnostic view).
+    - warehouse_needs_build() returns True when any required relation is
+      absent, so a marts-only warehouse is not treated as ready.
+    - get_warehouse_connection() / _check_target_within_project() surface the
+      readable PipelineError naming the missing relation(s) BEFORE any page
+      renders — a valid-looking custom warehouse can no longer crash later at
+      render time with a DuckDB missing-relation error.
+    - read_relation() docstring now states the app reads the consumer marts
+      plus the single diagnostic intermediate view.
+* streamlit/sections/overview.py — architecture prose is now factually
+  accurate: the Streamlit layer responsibility says it "reads the published
+  marts plus the single diagnostic view intermediate.int_unmatched_conversions";
+  the closing "never re-implements joins" paragraph and the module docstring
+  say the same; the relations-metrics block iterates REQUIRED_RELATIONS under
+  the heading "Relations this walkthrough reads" with a caption explaining the
+  ADR-8 diagnostic row.
+* streamlit/sections/_components.py — warehouse_readiness_banner() now counts
+  the full REQUIRED_RELATIONS contract ("N of M required relation(s) present
+  (marts + the ADR-8 diagnostic view)").
+* streamlit/app.py + streamlit/sections/__init__.py + README.md +
+  docs/decisions.md (ADR 7) — consumer-contract wording aligned: the app reads
+  the published marts plus the single diagnostic view; custom PFM_DUCKDB_PATH
+  warehouses must provide the full required-relation contract.
+* tests/test_streamlit_bootstrap.py — updated to required_relations_present();
+  new regressions:
+    - test_required_relations_present_false_when_diagnostic_view_missing —
+      all three marts present but no view => not ready, warehouse_needs_build
+      True, _missing_relations == ["intermediate.int_unmatched_conversions"].
+    - test_get_warehouse_connection_raises_readable_error_when_diagnostic_view_missing
+      — the accessor raises PipelineError naming the view.
+    - test_check_target_rejects_custom_missing_diagnostic_view — _check_target
+      names the missing view for a marts-only override.
+* tests/test_methodology_page.py — the synthetic warehouse builder now takes
+  include_diagnostic_view (default True) so tests no longer silently add the
+  view the contract demands; new regression
+  test_methodology_override_missing_diagnostic_view_fails_at_bootstrap drives
+  the real page against a marts-only override and proves it stops cleanly with
+  the readable error (no render-time exception).
+* tests/test_overview_page.py — heading assertion updated to "Relations this
+  walkthrough reads"; docstring aligned.
+
+Verification:
+* Full suite: 49 passed (45 previous + 4 new regressions), 12 pre-existing
+  fetch_arrow_table() deprecation warnings.
+* Real server boots with the worktree warehouse; /_stcore/health 200 and all
+  three pages serve HTTP 200.
+* git diff --check clean.
+

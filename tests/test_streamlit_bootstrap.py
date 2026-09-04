@@ -77,28 +77,113 @@ def test_warehouse_needs_build_when_marts_missing(tmp_path: Path) -> None:
     assert wb.warehouse_needs_build(db_path) is True
 
 
-def test_required_marts_present_after_full_mart_population(tmp_path: Path) -> None:
+def test_required_relations_present_after_full_population(tmp_path: Path) -> None:
     db_path = tmp_path / "pfm.duckdb"
     con = duckdb.connect(str(db_path))
     con.execute("create schema marts")
+    con.execute("create schema intermediate")
+    for schema, table in wb.REQUIRED_RELATIONS:
+        con.execute(f'create table "{schema}"."{table}" (x int)')
+    con.close()
+
+    assert wb.required_relations_present(db_path) is True
+    assert wb.warehouse_needs_build(db_path) is False
+
+
+def test_required_relations_present_false_when_one_mart_missing(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "pfm.duckdb"
+    con = duckdb.connect(str(db_path))
+    con.execute("create schema marts")
+    con.execute("create schema intermediate")
+    # Create every required relation except mart_attribution_health.
+    for mart in wb.EXPECTED_MARTS:
+        if mart == "mart_attribution_health":
+            continue
+        con.execute(f'create table marts."{mart}" (x int)')
+    con.execute(
+        "create table intermediate.int_unmatched_conversions (x int)"
+    )
+    con.close()
+
+    assert wb.required_relations_present(db_path) is False
+    assert wb.warehouse_needs_build(db_path) is True
+
+
+def test_required_relations_present_false_when_diagnostic_view_missing(
+    tmp_path: Path,
+) -> None:
+    """Regression: marts alone must not satisfy the required-relation contract.
+
+    A custom PFM_DUCKDB_PATH warehouse that provides only the three marts
+    (which the old readiness check validated) would still crash at render time
+    because the analysis and methodology pages read the ADR-8 diagnostic
+    view. The readiness check must treat that warehouse as not ready so the
+    bootstrap layer surfaces the readable PipelineError before any page
+    renders.
+    """
+    db_path = tmp_path / "pfm.duckdb"
+    con = duckdb.connect(str(db_path))
+    con.execute("create schema marts")
+    con.execute("create schema intermediate")
     for mart in wb.EXPECTED_MARTS:
         con.execute(f'create table marts."{mart}" (x int)')
     con.close()
 
-    assert wb.required_marts_present(db_path) is True
-    assert wb.warehouse_needs_build(db_path) is False
+    assert (db_path).is_file()
+    assert wb.required_relations_present(db_path) is False
+    assert wb.warehouse_needs_build(db_path) is True
+    assert wb._missing_relations(db_path) == [
+        "intermediate.int_unmatched_conversions"
+    ]
 
 
-def test_required_marts_present_false_when_one_mart_missing(tmp_path: Path) -> None:
-    db_path = tmp_path / "pfm.duckdb"
-    con = duckdb.connect(str(db_path))
+def test_get_warehouse_connection_raises_readable_error_when_diagnostic_view_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A custom override missing only the diagnostic view fails at bootstrap.
+
+    The warehouse file exists and has all three declared marts (the old
+    contract), but lacks intermediate.int_unmatched_conversions. get_warehouse_connection
+    must raise the readable PipelineError naming the missing relation, never
+    return a connection that crashes at render time.
+    """
+    custom = tmp_path / "pfm.duckdb"
+    con = duckdb.connect(str(custom))
     con.execute("create schema marts")
-    # Create all but the last expected mart.
-    for mart in wb.EXPECTED_MARTS[:-1]:
+    con.execute("create schema intermediate")
+    for mart in wb.EXPECTED_MARTS:
         con.execute(f'create table marts."{mart}" (x int)')
     con.close()
 
-    assert wb.required_marts_present(db_path) is False
+    monkeypatch.setenv("PFM_DUCKDB_PATH", str(custom))
+    wb.get_warehouse_connection.clear()
+    try:
+        with pytest.raises(
+            wb.PipelineError,
+            match="intermediate.int_unmatched_conversions",
+        ):
+            wb.get_warehouse_connection()
+    finally:
+        wb.get_warehouse_connection.clear()
+
+
+def test_check_target_rejects_custom_missing_diagnostic_view(
+    temp_database: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A marts-only custom override is rejected with the missing view named."""
+    temp_database.parent.mkdir(parents=True, exist_ok=True)
+    con = duckdb.connect(str(temp_database))
+    con.execute("create schema marts")
+    con.execute("create schema intermediate")
+    for mart in wb.EXPECTED_MARTS:
+        con.execute(f'create table marts."{mart}" (x int)')
+    con.close()
+
+    monkeypatch.setenv("PFM_DUCKDB_PATH", str(temp_database))
+    with pytest.raises(wb.PipelineError, match="intermediate.int_unmatched_conversions"):
+        wb._check_target_within_project(temp_database)
 
 
 def test_relation_exists_false_on_broken_file(tmp_path: Path) -> None:

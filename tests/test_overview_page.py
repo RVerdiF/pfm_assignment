@@ -8,7 +8,7 @@ These checks verify the Card-3 acceptance criteria that live on this page:
 an evaluator understands the problem and the real architecture without opening
 the code — the page explains the context in prose, renders an architecture
 diagram whose labels match the real pipeline stages, and connects read-only to
-the published marts.
+the published consumer relations (marts + the ADR-8 diagnostic view).
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def test_overview_page_renders_with_real_warehouse() -> None:
     headers = {h.value for h in at.subheader}
     assert "Purpose of this walkthrough" in headers
     assert "Architecture" in headers
-    assert "Marts this walkthrough reads" in headers
+    assert "Relations this walkthrough reads" in headers
 
 
 def test_overview_page_states_the_problem_in_prose() -> None:

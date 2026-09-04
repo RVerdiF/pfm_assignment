@@ -2,7 +2,8 @@
 
 A local data pipeline for Excel ingestion, deterministic conversion attribution,
 and mart consumption. The warehouse is DuckDB, dbt owns the transformation
-layers, and Streamlit is a thin read-only consumer of the published marts.
+layers, and Streamlit is a thin read-only consumer of the published marts (plus
+the single ADR-8 diagnostic intermediate view).
 
 ## Pipeline
 
@@ -185,7 +186,9 @@ PFM_DUCKDB_PATH=/path/to/pfm.duckdb streamlit run streamlit/app.py
 
 The app is designed to start even on a fresh environment where
 `warehouse/pfm.duckdb` does not exist yet. On startup it checks for the
-warehouse file and the required dbt marts; when they are missing it runs the
+warehouse file and the *required relations* — the consumer marts plus the
+`intermediate.int_unmatched_conversions` diagnostic view that both the
+analysis and methodology pages read. When they are missing it runs the
 canonical pipeline once — `python ingestion/load_excel.py`, then `dbt build`
 using the project-local profile (created from `dbt/profiles.yml.example` when
 absent) — and only then opens the connection. The bootstrap is cached for the
@@ -193,14 +196,16 @@ Streamlit session, so the same execution never rebuilds the warehouse twice.
 Failures are presented as readable errors in the app.
 
 A custom `PFM_DUCKDB_PATH` is expected to point at an existing warehouse with
-the required marts; the auto-rebuild path manages the default project
-warehouse only, because the ingestion script and dbt profile are wired to that
-location.
+the required relations (the three marts **and** the diagnostic
+`intermediate.int_unmatched_conversions` view); the auto-rebuild path manages
+the default project warehouse only, because the ingestion script and dbt
+profile are wired to that location.
 
-### Pages and marts
+### Pages and relations
 
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
-`Methodology and limitations`) that read only published dbt relations:
+`Methodology and limitations`) that read only the published consumer
+relations — the three marts and the single diagnostic intermediate view:
 
 - the Overview page explains the assignment problem in prose, renders the
   real pipeline architecture as a diagram with one responsibility per layer,

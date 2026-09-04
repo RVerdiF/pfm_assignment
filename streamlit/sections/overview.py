@@ -9,8 +9,11 @@ read-only Streamlit app — with a one-line responsibility per layer, confirms
 the app is connected read-only to the published marts, and points to the
 deeper pages.
 
-All numbers and relations shown come from dbt-published marts; this page never
-re-implements attribution or business joins.
+All numbers and relations shown come from dbt-published relations: the
+consumer marts plus the single ``intermediate.int_unmatched_conversions``
+diagnostic view (ADR 8) that the analysis and methodology pages read for the
+non-match reason taxonomy. This page never re-implements attribution or
+business joins.
 """
 from __future__ import annotations
 
@@ -18,12 +21,10 @@ import streamlit as st
 
 from warehouse_bootstrap import (
     DEFAULT_DATABASE_PATH,
-    EXPECTED_MARTS,
     PROJECT_ROOT,
+    REQUIRED_RELATIONS,
 )
 from sections._components import require_connection, warehouse_readiness_banner
-
-MART_SCHEMA = "marts"
 
 # Architecture diagram, one node per real pipeline stage. The DOT is rendered
 # client-side by Streamlit (no server-side graphviz binary required); the
@@ -82,8 +83,11 @@ ARCHITECTURE_LAYERS = (
     ),
     (
         "Streamlit",
-        "This app. It opens the warehouse read-only and only reads the "
-        "published marts; it never re-implements joins or business rules.",
+        "This app. It opens the warehouse read-only and reads the published "
+        "marts plus the single diagnostic view "
+        "`intermediate.int_unmatched_conversions` (which explains why a "
+        "conversion was not matched); it never re-implements joins or "
+        "business rules.",
     ),
 )
 
@@ -122,27 +126,39 @@ def render() -> None:
     st.write(
         "Attribution is decided once, in dbt, using **exact click-identifier "
         "matching** (gclid / fbclid / URL click id). The Streamlit app never "
-        "re-implements joins or business rules; it only reads the published "
-        "marts."
+        "re-implements joins or business rules: it reads only the published "
+        "marts plus the single `intermediate.int_unmatched_conversions` "
+        "diagnostic view that explains why a conversion was not matched "
+        "(see the Attribution analysis and Methodology pages)."
     )
 
     connection = require_connection()
     warehouse_readiness_banner(connection)
 
-    st.subheader("Marts this walkthrough reads")
+    st.subheader("Relations this walkthrough reads")
     counts: dict[str, int] = {}
-    for mart in EXPECTED_MARTS:
+    for schema, relation in REQUIRED_RELATIONS:
         try:
             row = connection.execute(
-                f'select count(*) from "{MART_SCHEMA}"."{mart}"'
+                f'select count(*) from "{schema}"."{relation}"'
             ).fetchone()
-            counts[mart] = int(row[0]) if row else 0
+            counts[f"{schema}.{relation}"] = int(row[0]) if row else 0
         except Exception as exc:  # pragma: no cover - read failure is surfaced
-            counts[mart] = -1
-            st.error(f"Could not read marts.{mart}: {exc}")
-    columns = st.columns(len(EXPECTED_MARTS))
-    for mart, column in zip(EXPECTED_MARTS, columns, strict=True):
-        column.metric(mart, f"{counts[mart]:,} rows")
+            counts[f"{schema}.{relation}"] = -1
+            st.error(f"Could not read {schema}.{relation}: {exc}")
+    columns = st.columns(len(REQUIRED_RELATIONS))
+    for relation, column in zip(
+        (f"{schema}.{relation}" for schema, relation in REQUIRED_RELATIONS),
+        columns,
+        strict=True,
+    ):
+        column.metric(relation, f"{counts[relation]:,} rows")
+    st.caption(
+        "The `intermediate` row is the ADR-8 diagnostic view "
+        "`int_unmatched_conversions`, read for its pre-computed "
+        "`unmatched_reason` only — the analysis and methodology pages use it "
+        "to explain why a conversion was not matched."
+    )
 
     with st.expander("Warehouse details"):
         st.write(f"Project root: {PROJECT_ROOT}")

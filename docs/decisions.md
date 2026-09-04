@@ -97,18 +97,24 @@ and PRs stay consistent and grep-friendly.
 environment where `warehouse/pfm.duckdb` does not exist yet, while still being
 a thin read-only consumer of dbt marts.
 
-**Decision:** The app checks for the warehouse file and the required marts on
-startup. When they are missing, it runs the canonical pipeline once per
-Streamlit session — `python ingestion/load_excel.py`, then `dbt build` with
-the project-local profile (created from `dbt/profiles.yml.example` when
-absent) — before opening the connection read-only. The connection is cached
-with `st.cache_resource`. The app never re-implements attribution or business
-joins; it only reads the published marts.
+**Decision:** The app checks for the warehouse file and the *required
+relations* on startup — the consumer marts plus the single
+`intermediate.int_unmatched_conversions` diagnostic view (ADR 8), which both
+the analysis and methodology pages read. When they are missing, it runs the
+canonical pipeline once per Streamlit session — `python ingestion/load_excel.py`,
+then `dbt build` with the project-local profile (created from
+`dbt/profiles.yml.example` when absent) — before opening the connection
+read-only. The connection is cached with `st.cache_resource`. The app never
+re-implements attribution or business joins; it reads only the published
+consumer relations.
 
 **Consequences:** A fresh checkout can launch the app without manual pipeline
 steps. The bootstrap is limited to the default project warehouse (custom
-`PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse), and
-pipeline failures surface as readable errors instead of silent partial state.
+`PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse
+satisfying the full required-relation contract — a warehouse that passes only
+the mart checks cannot crash later at render time with a missing-relation
+error), and pipeline failures surface as readable errors instead of silent
+partial state.
 
 ---
 
