@@ -1,0 +1,25 @@
+name: Temporary schema dictionary probe
+on:
+  push:
+    branches: [tmp/join-hypothesis-probe]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install openpyxl
+      - name: Print schema and dictionary
+        run: |
+          python - <<'PY'
+          from openpyxl import load_workbook
+          wb = load_workbook('data/source.xlsx', read_only=True, data_only=True)
+          for name in ['Key Table Schemas','Data Dictionary']:
+              print(f'=== {name} ===')
+              ws = wb[name]
+              for row in ws.iter_rows(values_only=True):
+                  vals = [str(v).strip() if v is not None else '' for v in row]
+                  if any(vals): print(' | '.join(vals))
+          PY
