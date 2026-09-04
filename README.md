@@ -26,7 +26,7 @@ dbt intermediate  (attribution candidates -> deterministic attribution -> unmatc
 dbt marts  (fct_revenue_attribution, fct_commission_daily_local, mart_attribution_health)
         |
         v
-consumers  (EDA notebook, Streamlit app, BigQuery consumption query)
+consumers  (EDA notebook, Streamlit walkthrough, BigQuery consumption query)
 ```
 
 ## Requirements
@@ -204,8 +204,9 @@ profile are wired to that location.
 ### Pages and relations
 
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
-`Methodology and limitations`) that read only the published consumer
-relations — the three marts and the single diagnostic intermediate view:
+`Methodology and limitations`, and the closing `What I'd do next`) that read
+only the published consumer relations — the three marts and the single
+diagnostic intermediate view:
 
 - the Overview page explains the assignment problem in prose, renders the
   real pipeline architecture as a diagram with one responsibility per layer,
@@ -228,6 +229,16 @@ relations — the three marts and the single diagnostic intermediate view:
   the decided/valid conversion counts, the conversion-date span, and the
   outside-window count — are read live from those same relations, never from
   fixed delivered-sample totals, so a custom warehouse is not contradicted.
+- the closing `What I'd do next` page is a short, architecture-oriented
+  production-evolution outline (BigQuery as the managed warehouse with the
+  same dbt `raw -> staging -> intermediate -> marts` shape, dbt-bigquery as
+  the adapter, Cloud Storage as the landing zone, Cloud Run Jobs / Cloud
+  Build for execution and scheduling, Terraform for datasets/service
+  accounts/IAM/buckets, GitHub Actions for CI/CD, and Cloud Monitoring for
+  freshness/failure/match-rate/unmatched-reason observability). It is pure
+  prose: it reads no warehouse relation, renders no chart, and explicitly
+  states that none of that production infrastructure exists in this
+  repository — the delivered solution stays local and self-contained.
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads
@@ -269,7 +280,7 @@ docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/attribution_health.sql  BigQuery mart consumption query
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
 streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
-streamlit/sections/                Walkthrough pages (overview, analysis, methodology)
+streamlit/sections/                Walkthrough pages (overview, analysis, methodology, next_steps)
 tests/                             pytest suites (ingestion, bootstrap, structure)
 warehouse/pfm.duckdb               Generated local warehouse (ignored)
 ```
