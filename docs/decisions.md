@@ -97,18 +97,24 @@ and PRs stay consistent and grep-friendly.
 environment where `warehouse/pfm.duckdb` does not exist yet, while still being
 a thin read-only consumer of dbt marts.
 
-**Decision:** The app checks for the warehouse file and the required marts on
-startup. When they are missing, it runs the canonical pipeline once per
-Streamlit session — `python ingestion/load_excel.py`, then `dbt build` with
-the project-local profile (created from `dbt/profiles.yml.example` when
-absent) — before opening the connection read-only. The connection is cached
-with `st.cache_resource`. The app never re-implements attribution or business
-joins; it only reads the published marts.
+**Decision:** The app checks for the warehouse file and the *required
+relations* on startup — the consumer marts plus the single
+`intermediate.int_unmatched_conversions` diagnostic view (ADR 8), which both
+the analysis and methodology pages read. When they are missing, it runs the
+canonical pipeline once per Streamlit session — `python ingestion/load_excel.py`,
+then `dbt build` with the project-local profile (created from
+`dbt/profiles.yml.example` when absent) — before opening the connection
+read-only. The connection is cached with `st.cache_resource`. The app never
+re-implements attribution or business joins; it reads only the published
+consumer relations.
 
 **Consequences:** A fresh checkout can launch the app without manual pipeline
 steps. The bootstrap is limited to the default project warehouse (custom
-`PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse), and
-pipeline failures surface as readable errors instead of silent partial state.
+`PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse
+satisfying the full required-relation contract — a warehouse that passes only
+the mart checks cannot crash later at render time with a missing-relation
+error), and pipeline failures surface as readable errors instead of silent
+partial state.
 
 ---
 
@@ -137,3 +143,40 @@ page zero-fills the full declared taxonomy). The audit trail remains intact:
 the view is a strict filtered projection of the attribution decision table.
 The intermediate-layer reading is narrow and documented so later consumers do
 not broaden it into business joins.
+
+---
+
+## 9. The walkthrough narrative is self-contained in the Streamlit pages
+
+**Context:** Card 3 turns the app into a final, self-contained delivery: an
+evaluator must understand the problem, the solution architecture, the
+method, the observed results, and the limitations *without* opening external
+documentation.
+
+**Decision:** The walkthrough lives in the Streamlit pages, as prose and
+light visuals around the same dbt-published relations the analysis page
+reads:
+
+- The Overview page states the problem, renders the real pipeline
+  architecture (`Excel sample -> Polars -> DuckDB raw -> dbt staging ->
+  dbt intermediate -> dbt marts -> Streamlit`) as a client-side graphviz
+  diagram plus one-line layer responsibilities, and confirms the read-only
+  marts connection.
+- The Methodology and limitations page explains the four deterministic rules
+  (exact click-id match, temporal window, identifier priority, recency
+  tie-break), the matched/ambiguous/unmatched outcomes, interprets the
+  observed results, and lists limitations and recommendations.
+- Every analysis section opens with a prose reading of its numbers. No
+  attribution rule is re-implemented and no new intermediate read is added.
+
+**Consequences:** The app is a complete walkthrough with a clear heading
+hierarchy and short prose around each chart. Every narrative quantity cited
+in prose — health-mart sums, revenue-valid conversions and commission,
+loss-cause reason counts, and the warehouse-specific limitation figures
+(decided/valid conversion counts, the conversion-date span, and the
+outside-window count) — is read live from the same dbt relations as the
+charts (the health mart, the revenue mart, and the pre-computed
+`int_unmatched_conversions` diagnostic view), so text cannot drift from data
+and a different valid warehouse via the documented `PFM_DUCKDB_PATH` override
+is never contradicted by the walkthrough. Layer responsibilities and rule
+vocabulary are kept in sync with the dbt model headers and docs in this file.

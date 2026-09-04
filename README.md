@@ -2,7 +2,8 @@
 
 A local data pipeline for Excel ingestion, deterministic conversion attribution,
 and mart consumption. The warehouse is DuckDB, dbt owns the transformation
-layers, and Streamlit is a thin read-only consumer of the published marts.
+layers, and Streamlit is a thin read-only consumer of the published marts (plus
+the single ADR-8 diagnostic intermediate view).
 
 ## Pipeline
 
@@ -185,7 +186,9 @@ PFM_DUCKDB_PATH=/path/to/pfm.duckdb streamlit run streamlit/app.py
 
 The app is designed to start even on a fresh environment where
 `warehouse/pfm.duckdb` does not exist yet. On startup it checks for the
-warehouse file and the required dbt marts; when they are missing it runs the
+warehouse file and the *required relations* — the consumer marts plus the
+`intermediate.int_unmatched_conversions` diagnostic view that both the
+analysis and methodology pages read. When they are missing it runs the
 canonical pipeline once — `python ingestion/load_excel.py`, then `dbt build`
 using the project-local profile (created from `dbt/profiles.yml.example` when
 absent) — and only then opens the connection. The bootstrap is cached for the
@@ -193,15 +196,20 @@ Streamlit session, so the same execution never rebuilds the warehouse twice.
 Failures are presented as readable errors in the app.
 
 A custom `PFM_DUCKDB_PATH` is expected to point at an existing warehouse with
-the required marts; the auto-rebuild path manages the default project
-warehouse only, because the ingestion script and dbt profile are wired to that
-location.
+the required relations (the three marts **and** the diagnostic
+`intermediate.int_unmatched_conversions` view); the auto-rebuild path manages
+the default project warehouse only, because the ingestion script and dbt
+profile are wired to that location.
 
-### Pages and marts
+### Pages and relations
 
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
-`Methodology and limitations`) that read only published dbt relations:
+`Methodology and limitations`) that read only the published consumer
+relations — the three marts and the single diagnostic intermediate view:
 
+- the Overview page explains the assignment problem in prose, renders the
+  real pipeline architecture as a diagram with one responsibility per layer,
+  and confirms the read-only marts connection;
 - `marts.fct_revenue_attribution` for valid-conversion revenue, commission,
   match status, and UTM breakdowns;
 - `intermediate.int_unmatched_conversions` (a dbt diagnostic view, read for
@@ -209,7 +217,17 @@ The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
   "why conversions are not attributed" audit panel;
 - `marts.mart_attribution_health` for daily/source attribution monitoring;
 - `marts.fct_commission_daily_local` for the clearly labelled local commission
-  proxy.
+  proxy;
+- the Methodology and limitations page states the deterministic attribution
+  rules in plain language (exact click-id matching, temporal window,
+  identifier priority, recency tie-break, and the matched / ambiguous /
+  unmatched outcomes), interprets the observed results with totals read live
+  from the health mart, the revenue mart, and the diagnostic reason view, and
+  lists the sample's limitations and the recommendations (each citing the
+  live loss cause it addresses). The warehouse-specific limitation figures —
+  the decided/valid conversion counts, the conversion-date span, and the
+  outside-window count — are read live from those same relations, never from
+  fixed delivered-sample totals, so a custom warehouse is not contradicted.
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads
@@ -217,9 +235,11 @@ and unmatched rates (the decided/denied audit reconciliation reads
 table with the full dbt taxonomy zero-filled), marketing attribution by UTM
 source and by exact match method — with side-by-side bar charts for both
 conversions and commission by source — and revenue/commission with the daily
-proxy kept as an explicit complement. It does not query raw or staging
-relations and does not perform attribution joins in Python; its only
-intermediate-layer read is the diagnostic `int_unmatched_conversions` view.
+proxy kept as an explicit complement. Every section opens with a short prose
+reading of the numbers so the page tells the story rather than showing raw
+charts. The app does not query raw or staging relations and does not perform
+attribution joins in Python; its only intermediate-layer read is the
+diagnostic `int_unmatched_conversions` view.
 
 ## BigQuery consumption asset
 

@@ -1,8 +1,10 @@
 """PFM Streamlit walkthrough entrypoint.
 
-The app is a thin read-only consumer of the dbt marts. On startup it ensures
-the local warehouse exists: if ``warehouse/pfm.duckdb`` is missing or the
-required marts are absent, it runs the canonical pipeline (ingestion then
+The app is a thin read-only consumer of the dbt-published relations: the
+marts plus the single ADR-8 diagnostic view (`intermediate.int_unmatched_conversions`).
+On startup it ensures the local warehouse exists and satisfies that
+required-relation contract: if ``warehouse/pfm.duckdb`` is missing or any
+required relation is absent, it runs the canonical pipeline (ingestion then
 ``dbt build``) once, cached for the Streamlit session, and opens the warehouse
 read-only. All attribution decisions and business joins live in dbt; the
 Streamlit code never re-implements them.

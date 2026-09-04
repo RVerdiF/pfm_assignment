@@ -2,7 +2,7 @@
 
 The app must start even when ``warehouse/pfm.duckdb`` does not exist yet (for
 example on a fresh hosting environment). This module centralizes that
-decision: when the warehouse file is missing or the required dbt marts are
+decision: when the warehouse file is missing or the required dbt relations are
 absent, it runs the canonical pipeline first —
 
     python ingestion/load_excel.py
@@ -12,10 +12,18 @@ absent, it runs the canonical pipeline first —
 connection is cached for the rest of the Streamlit session, so the same
 execution never rebuilds the warehouse twice.
 
+This module also owns the *required-relation contract*: the relations the
+walkthrough pages read (the consumer marts plus the one narrow
+``intermediate.int_unmatched_conversions`` diagnostic view documented in ADR
+8). Startup fails with a readable ``PipelineError`` before any page renders
+when the warehouse cannot satisfy that contract, so a custom
+``PFM_DUCKDB_PATH`` warehouse that passes every check can never crash later at
+render time with a missing-relation error.
+
 This module is intentionally thin on analysis: it owns *starting* the
 pipeline, never *re-implementing* attribution or business joins. All
-attribution decisions stay in the dbt models; the app only reads the published
-marts.
+attribution decisions stay in the dbt models; the app reads only the published
+consumer relations.
 """
 from __future__ import annotations
 
@@ -33,11 +41,28 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATABASE_PATH = PROJECT_ROOT / "warehouse" / "pfm.duckdb"
 
 MART_SCHEMA = "marts"
+INTERMEDIATE_SCHEMA = "intermediate"
 # Consumer-facing relations the app needs before it can render analytics.
 EXPECTED_MARTS = (
     "fct_revenue_attribution",
     "fct_commission_daily_local",
     "mart_attribution_health",
+)
+# The narrow diagnostic view the analysis and methodology pages read for the
+# unmatched-reason taxonomy (ADR 8: the only intermediate-layer read, an
+# aggregate over its pre-computed unmatched_reason column — never a join).
+# It is part of the same required-relation contract as the marts so a custom
+# PFM_DUCKDB_PATH warehouse cannot pass bootstrap and then crash at render.
+EXPECTED_INTERMEDIATE_VIEWS = (
+    "int_unmatched_conversions",
+)
+
+# Every relation the walkthrough pages read, as (schema, table) pairs. Startup
+# verifies this full contract before any page renders.
+REQUIRED_RELATIONS: tuple[tuple[str, str], ...] = tuple(
+    (MART_SCHEMA, mart) for mart in EXPECTED_MARTS
+) + tuple(
+    (INTERMEDIATE_SCHEMA, view) for view in EXPECTED_INTERMEDIATE_VIEWS
 )
 
 
@@ -193,11 +218,18 @@ def _relation_exists(
         con.close()
 
 
-def required_marts_present(database_path: str | Path | None = None) -> bool:
-    """Check that every mart the analytics UI needs is materialized."""
+def required_relations_present(database_path: str | Path | None = None) -> bool:
+    """Check that every relation the analytics UI reads is materialized.
+
+    The contract is the consumer marts plus the narrow
+    ``intermediate.int_unmatched_conversions`` diagnostic view (ADR 8): both
+    the analysis page and the methodology page query that view, so a warehouse
+    that satisfies only the marts would crash at render time.
+    """
     db_path = _database_path_or_default(database_path)
     return all(
-        _relation_exists(db_path, MART_SCHEMA, mart) for mart in EXPECTED_MARTS
+        _relation_exists(db_path, schema, table)
+        for schema, table in REQUIRED_RELATIONS
     )
 
 
@@ -206,21 +238,21 @@ def warehouse_needs_build(database_path: str | Path | None = None) -> bool:
 
     Two situations require a rebuild:
     - the warehouse file does not exist at all, or
-    - the file exists but the required marts are missing/stale (e.g. only raw
-      tables were loaded, or a previous dbt run did not finish).
+    - the file exists but the required relations are missing/stale (e.g. only
+      raw tables were loaded, or a previous dbt run did not finish).
     """
     db_path = _database_path_or_default(database_path)
     if not db_path.is_file():
         return True
-    return not required_marts_present(db_path)
+    return not required_relations_present(db_path)
 
 
-def _missing_marts(database_path: str | Path | None = None) -> list[str]:
+def _missing_relations(database_path: str | Path | None = None) -> list[str]:
     db_path = _database_path_or_default(database_path)
     return [
-        f"{MART_SCHEMA}.{mart}"
-        for mart in EXPECTED_MARTS
-        if not _relation_exists(db_path, MART_SCHEMA, mart)
+        f"{schema}.{table}"
+        for schema, table in REQUIRED_RELATIONS
+        if not _relation_exists(db_path, schema, table)
     ]
 
 
@@ -232,14 +264,25 @@ def _check_target_within_project(db_path: Path) -> None:
     ``PFM_DUCKDB_PATH`` may point at an *already provisioned* warehouse to
     read, but the app cannot auto-rebuild an arbitrary path without changing
     the pipeline configuration. Failing loudly beats silently rebuilding the
-    wrong file.
+    wrong file — and when the custom warehouse is missing required relations
+    the readable error names them, so a marts-only override cannot pass
+    bootstrap and then crash at render time.
     """
     if db_path.resolve() != DEFAULT_DATABASE_PATH.resolve():
+        missing = _missing_relations(db_path) if db_path.is_file() else []
+        detail = ""
+        if missing:
+            detail = (
+                " The warehouse is missing required relation(s): "
+                + ", ".join(missing)
+                + "."
+            )
         raise PipelineError(
             f"The configured database path {db_path} is not the default "
             f"project warehouse {DEFAULT_DATABASE_PATH}. Automatic bootstrap "
             "only manages the default warehouse. Either unset PFM_DUCKDB_PATH "
-            "or point it at an existing warehouse with the required marts."
+            "or point it at an existing warehouse with the required "
+            f"relations.{detail}"
         )
 
 
@@ -264,10 +307,10 @@ def get_warehouse_connection(
             run_ingestion(project)
             run_dbt_build(project)
 
-    missing = _missing_marts(db_path)
+    missing = _missing_relations(db_path)
     if missing:
         raise PipelineError(
-            "The warehouse exists but the expected marts are missing: "
+            "The warehouse exists but the required relations are missing: "
             f"{', '.join(missing)}. The pipeline finished without creating "
             "them; inspect the dbt build output above."
         )
@@ -305,11 +348,15 @@ def connection_for_app(
 
 
 def read_relation(
-    connection: duckdb.DuckDBPyConnection, table_name: str, schema: str = MART_SCHEMA
+    connection: duckdb.DuckDBPyConnection,
+    table_name: str,
+    schema: str = MART_SCHEMA,
 ):
-    """Read one published mart relation as an Arrow table.
+    """Read one published consumer relation as an Arrow table.
 
-    The app may read only marts through this helper; it never queries raw or
+    The app may read only the required consumer relations through this helper:
+    the ``marts.*`` relations and the single ``intermediate`` diagnostic view
+    (``int_unmatched_conversions``) allowed by ADR 8. It never reads raw or
     staging relations and never re-implements business joins.
     """
     return connection.execute(
