@@ -15,10 +15,13 @@ Narrative numbers are never hard-coded: every result/recommendation quantity
 is derived on each render from the same dbt relations the analysis page
 charts — marts.mart_attribution_health (decided/match-status totals),
 marts.fct_revenue_attribution (valid conversions and commission), and
-intermediate.int_unmatched_conversions (the non-match reason taxonomy). A
-page rendered against a different valid warehouse (the documented
-PFM_DUCKDB_PATH override) always reads that warehouse's own totals, so the
-walkthrough cannot contradict its own marts.
+intermediate.int_unmatched_conversions (the non-match reason taxonomy). The
+warehouse-specific figures in the Limitations list are read live too: the
+decided-conversion count and date span come from the health mart, the
+revenue-valid count from the revenue mart, and the outside-window count from
+the diagnostic reason view. A page rendered against a different valid
+warehouse (the documented PFM_DUCKDB_PATH override) always reads that
+warehouse's own totals, so the walkthrough cannot contradict its own marts.
 """
 from __future__ import annotations
 
@@ -219,43 +222,92 @@ def _build_result_interpretations(
     return interpretations
 
 
-# Sample limitations, each matching a concrete consequence already visible in
-# the data or in the assignment contract. No limitation is invented to look
-# thorough; each one maps to a real boundary. These describe the delivered
-# workbook (the fixed assignment input), not a marts total, so they are stated
-# once as context rather than read from the warehouse on every render.
-LIMITATIONS = (
-    (
-        "Small sample",
-        "100 TrackNow conversions and 200 PostHog sessions over a short "
-        "window cannot represent production volume or channel mix.",
-    ),
-    (
-        "Limited PostHog window",
-        "Sessions start on 25 May while conversions start on 9 May, so any "
-        "conversion before 25 May is structurally unexplainable by this "
-        "sample.",
-    ),
-    (
-        "TrackNow gives a conversion date, not a timestamp",
-        "Attribution cannot tell whether a session earlier the same day "
-        "actually preceded the order, so same-day sessions are all eligible "
-        "and late-day sessions are never excluded by time.",
-    ),
-    (
-        "No authoritative daily commission source",
-        "The real `analytics_core.f_commission_daily` table was not provided. "
-        "The app shows a clearly labelled LOCAL proxy built from the TrackNow "
-        "sample instead, never as the source of truth.",
-    ),
-    (
-        "No fuzzy rules or undocumented bridges",
-        "Attribution never approximates identifiers and never joins on an "
-        "assumed relationship. That keeps every decision auditable, at the "
-        "cost of leaving conversions unmatched when the data does not carry "
-        "an exact key.",
-    ),
-)
+def _format_date(value) -> str:
+    """Format a date value from DuckDB as an ISO day (YYYY-MM-DD)."""
+    return str(value) if value is not None else "—"
+
+
+def _limitation_notes(connection) -> list[tuple[str, str]]:
+    """Return the limitation items, with warehouse-specific figures read live.
+
+    Each limitation maps to a real boundary of this delivery; none is invented
+    to look thorough. The first two carry numbers/dates that describe the
+    *warehouse being evaluated*, so they are read from the same consumer
+    relations the rest of the page reads (never from fixed delivered-sample
+    totals, which would contradict a valid PFM_DUCKDB_PATH override):
+
+    - marts.mart_attribution_health — the full decided conversion population
+      (every TrackNow conversion the attribution engine decided, including
+      denied rows) and its conversion-date span.
+    - marts.fct_revenue_attribution — the revenue-valid conversion count (the
+      subset the app's overview cites as "valid conversions").
+    - intermediate.int_unmatched_conversions — the number of conversions the
+      diagnostic view classifies as falling outside the PostHog sample window
+      (the only window-aware quantity the consumer contract publishes; the
+      session-side start date is not exposed to the app, so the boundary is
+      stated structurally rather than with a fixed calendar date).
+
+    The remaining three limitations are non-numeric properties of the
+    pipeline/assignment and are stated once.
+    """
+    health = connection.execute(
+        "select "
+        "  coalesce(sum(total_conversions), 0), "
+        "  min(conversion_date), "
+        "  max(conversion_date) "
+        "from marts.mart_attribution_health"
+    ).fetchone()
+    decided = int(health[0])
+    min_date = _format_date(health[1])
+    max_date = _format_date(health[2])
+    valid = int(
+        connection.execute(
+            "select count(*) from marts.fct_revenue_attribution"
+        ).fetchone()[0]
+    )
+    outside = int(
+        connection.execute(
+            "select count(*) from intermediate.int_unmatched_conversions "
+            "where unmatched_reason = 'outside_posthog_sample_window'"
+        ).fetchone()[0]
+    )
+
+    notes = [
+        (
+            "Small sample",
+            f"{decided:,} conversions (of which {valid:,} are revenue-valid) "
+            f"over the span {min_date} to {max_date} cannot represent "
+            "production volume or channel mix.",
+        ),
+        (
+            "Limited PostHog window",
+            f"{outside:,} conversions fall outside what the sample can explain "
+            "because their orders predate the earliest recorded session (or the "
+            "only sessions carrying their click id come after the order date). "
+            "A conversion before the session window is structurally "
+            "unexplainable by this sample.",
+        ),
+        (
+            "TrackNow gives a conversion date, not a timestamp",
+            "Attribution cannot tell whether a session earlier the same day "
+            "actually preceded the order, so same-day sessions are all eligible "
+            "and late-day sessions are never excluded by time.",
+        ),
+        (
+            "No authoritative daily commission source",
+            "The real `analytics_core.f_commission_daily` table was not provided. "
+            "The app shows a clearly labelled LOCAL proxy built from the TrackNow "
+            "sample instead, never as the source of truth.",
+        ),
+        (
+            "No fuzzy rules or undocumented bridges",
+            "Attribution never approximates identifiers and never joins on an "
+            "assumed relationship. That keeps every decision auditable, at the "
+            "cost of leaving conversions unmatched when the data does not carry "
+            "an exact key.",
+        ),
+    ]
+    return notes
 
 
 def _page_intro() -> None:
@@ -305,10 +357,10 @@ def _results_section(facts: dict[str, int | float]) -> None:
     )
 
 
-def _limitations_section() -> None:
+def _limitations_section(connection) -> None:
     st.subheader("Limitations")
     st.write("What this delivery does not claim:")
-    for title, body in LIMITATIONS:
+    for title, body in _limitation_notes(connection):
         st.markdown(f"- **{title}** — {body}")
 
 
@@ -384,5 +436,5 @@ def render() -> None:
 
     _method_section()
     _results_section(facts)
-    _limitations_section()
+    _limitations_section(connection)
     _recommendations_section(facts)

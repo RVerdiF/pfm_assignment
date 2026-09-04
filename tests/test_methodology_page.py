@@ -145,6 +145,52 @@ def _assert_narrative_matches_relations(
         ) in body
 
 
+def _limitation_facts(database_path: Path) -> dict[str, int | str]:
+    """Read the live relations behind the Limitations bullets, as ground truth."""
+    con = duckdb.connect(str(database_path), read_only=True)
+    try:
+        health = con.execute(
+            "select coalesce(sum(total_conversions),0), "
+            "min(conversion_date), max(conversion_date) "
+            "from marts.mart_attribution_health"
+        ).fetchone()
+        valid = con.execute(
+            "select count(*) from marts.fct_revenue_attribution"
+        ).fetchone()[0]
+        outside = con.execute(
+            "select count(*) from intermediate.int_unmatched_conversions "
+            "where unmatched_reason = 'outside_posthog_sample_window'"
+        ).fetchone()[0]
+    finally:
+        con.close()
+    return {
+        "decided": int(health[0]),
+        "min_date": str(health[1]) if health[1] is not None else "—",
+        "max_date": str(health[2]) if health[2] is not None else "—",
+        "valid": int(valid),
+        "outside": int(outside),
+    }
+
+
+def _assert_limitations_match_relations(body: str, facts: dict) -> None:
+    """Assert the Limitations bullets cite live relation figures, not literals.
+
+    Every warehouse-specific number/date in the limitations list is read from
+    the same relations this helper queries, so an override warehouse with
+    different totals cannot be contradicted by the Limitations text.
+    """
+    decided = int(facts["decided"])
+    min_date = str(facts["min_date"])
+    max_date = str(facts["max_date"])
+    valid = int(facts["valid"])
+    outside = int(facts["outside"])
+    assert (
+        f"{decided:,} conversions (of which {valid:,} are revenue-valid) "
+        f"over the span {min_date} to {max_date}"
+    ) in body
+    assert f"{outside:,} conversions fall outside what the sample can explain" in body
+
+
 def test_methodology_page_renders_with_real_warehouse() -> None:
     at = _render()
     assert not at.exception, at.exception
@@ -198,9 +244,11 @@ def test_methodology_prose_reconciles_with_live_marts() -> None:
     """
     at = _render()
     assert not at.exception, at.exception
+    body = _body(at)
     _assert_narrative_matches_relations(
-        _body(at), _captions(at), _relation_totals(WAREHOUSE)
+        body, _captions(at), _relation_totals(WAREHOUSE)
     )
+    _assert_limitations_match_relations(body, _limitation_facts(WAREHOUSE))
 
 
 def test_methodology_narrative_renders_against_non_default_warehouse(
@@ -231,6 +279,10 @@ def test_methodology_narrative_renders_against_non_default_warehouse(
         # The narrative (caption + prose) reconciles to the synthetic relations.
         _assert_narrative_matches_relations(body, captions, facts)
 
+        # The Limitations bullets also reconcile to the synthetic relations:
+        # its valid-conversion count/date span and its outside-window count.
+        _assert_limitations_match_relations(body, _limitation_facts(synthetic))
+
         # The all-unmatched reading must NOT appear when the override has
         # matches; the delivered-sample totals must never leak into an
         # override render.
@@ -238,6 +290,13 @@ def test_methodology_narrative_renders_against_non_default_warehouse(
             assert "The whole valid sample is unattributed" not in body
         assert "£1,001.70" not in body
         assert "100 conversions" not in captions
+        # Delivered-sample limitation claims must not leak either: the
+        # synthetic warehouse has 10 valid rows over 2026-06-01..2026-06-03,
+        # so a fixed "100 TrackNow / 200 PostHog / 25 May / 9 May" claim would
+        # be caught here.
+        assert "200 PostHog sessions" not in body
+        assert "25 May" not in body
+        assert "9 May" not in body
     finally:
         wb.get_warehouse_connection.clear()
 

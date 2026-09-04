@@ -224,7 +224,10 @@ relations — the three marts and the single diagnostic intermediate view:
   unmatched outcomes), interprets the observed results with totals read live
   from the health mart, the revenue mart, and the diagnostic reason view, and
   lists the sample's limitations and the recommendations (each citing the
-  live loss cause it addresses).
+  live loss cause it addresses). The warehouse-specific limitation figures —
+  the decided/valid conversion counts, the conversion-date span, and the
+  outside-window count — are read live from those same relations, never from
+  fixed delivered-sample totals, so a custom warehouse is not contradicted.
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads

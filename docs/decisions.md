@@ -171,9 +171,11 @@ reads:
 
 **Consequences:** The app is a complete walkthrough with a clear heading
 hierarchy and short prose around each chart. Every narrative quantity cited
-in prose — health-mart sums, revenue-valid conversions and commission, and
-the loss-cause reason counts — is read live from the same dbt relations as
-the charts (the health mart, the revenue mart, and the pre-computed
+in prose — health-mart sums, revenue-valid conversions and commission,
+loss-cause reason counts, and the warehouse-specific limitation figures
+(decided/valid conversion counts, the conversion-date span, and the
+outside-window count) — is read live from the same dbt relations as the
+charts (the health mart, the revenue mart, and the pre-computed
 `int_unmatched_conversions` diagnostic view), so text cannot drift from data
 and a different valid warehouse via the documented `PFM_DUCKDB_PATH` override
 is never contradicted by the walkthrough. Layer responsibilities and rule
