@@ -98,7 +98,6 @@ def _assert_narrative_matches_relations(
     missing = int(reasons.get("missing_click_id", 0))
     not_found = int(reasons.get("click_id_not_found", 0))
     outside = int(reasons.get("outside_posthog_sample_window", 0))
-    non_matched = sum(reasons.values())
 
     # Caption mirrors the health mart sums exactly.
     assert (
