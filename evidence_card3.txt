@@ -1,6 +1,8 @@
 Evidence — Card 3 (t_485f334d) — Narrative, architecture and walkthrough completion
 Branch: wt/t_485f334d  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main 3a83509 (Card 2 merged via PR #18)
+Commit: 5d0e617 feat(streamlit): complete walkthrough narrative, architecture
+        and methodology (Card 3)
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
