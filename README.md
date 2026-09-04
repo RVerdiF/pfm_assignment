@@ -167,20 +167,40 @@ Tests run in two layers:
 
 ## Streamlit consumer
 
-After ingestion and `dbt build`, launch the consumer from the repository root:
+Launch the consumer from the repository root:
 
 ```bash
 streamlit run streamlit/app.py
 ```
 
-The app opens `warehouse/pfm.duckdb` read-only by default. To use another local
-warehouse without editing code, set an explicit path:
+The app opens `warehouse/pfm.duckdb` read-only by default. To use another
+already-provisioned local warehouse without editing code, set an explicit
+path:
 
 ```bash
 PFM_DUCKDB_PATH=/path/to/pfm.duckdb streamlit run streamlit/app.py
 ```
 
-The app reads only these dbt marts:
+### Reproducible bootstrap
+
+The app is designed to start even on a fresh environment where
+`warehouse/pfm.duckdb` does not exist yet. On startup it checks for the
+warehouse file and the required dbt marts; when they are missing it runs the
+canonical pipeline once — `python ingestion/load_excel.py`, then `dbt build`
+using the project-local profile (created from `dbt/profiles.yml.example` when
+absent) — and only then opens the connection. The bootstrap is cached for the
+Streamlit session, so the same execution never rebuilds the warehouse twice.
+Failures are presented as readable errors in the app.
+
+A custom `PFM_DUCKDB_PATH` is expected to point at an existing warehouse with
+the required marts; the auto-rebuild path manages the default project
+warehouse only, because the ingestion script and dbt profile are wired to that
+location.
+
+### Pages and marts
+
+The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
+`Methodology and limitations`) that read only the published marts:
 
 - `marts.fct_revenue_attribution` for valid-conversion revenue, commission,
   match status, and UTM breakdowns;
@@ -189,8 +209,7 @@ The app reads only these dbt marts:
   proxy.
 
 It does not query raw or staging relations and does not perform attribution
-joins in Python. If the warehouse or marts are missing, it displays setup
-instructions instead of creating or modifying data.
+joins in Python.
 
 ## BigQuery consumption asset
 
@@ -218,8 +237,10 @@ notebooks/01_data_exploration.ipynb  Pre-modeling EDA
 notebooks/README.md                How to run the EDA and what it found
 docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/attribution_health.sql  BigQuery mart consumption query
-streamlit/app.py                   Read-only marts consumer
-tests/                             pytest suites (ingestion, project structure)
+streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
+streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
+streamlit/sections/                Walkthrough pages (overview, analysis, methodology)
+tests/                             pytest suites (ingestion, bootstrap, structure)
 warehouse/pfm.duckdb               Generated local warehouse (ignored)
 ```
 
