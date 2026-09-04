@@ -83,10 +83,22 @@ created from /usr/bin python3.12 snap; installed exactly requirements.txt)
        intermediate.int_unmatched_conversions rows=100
    BOOTSTRAP_OK.
 4. Real `streamlit run streamlit/app.py --server.headless true` in the clean
-   env on port 8765: /_stcore/health -> 200 "ok"; every page served HTTP 200:
-   / -> 200, /overview -> 200, /analysis -> 200, /methodology -> 200,
-   /next-steps -> 200 (next-steps page exists on this base via the walkthrough
-   merged in PR #19).
+   env on port 8766 from the exact submitted tree (358c6b6):
+   /_stcore/health -> 200 "ok"; server boots with the three st.Page routes
+   registered in this tree's streamlit/app.py:
+       /overview    (default=True; also served at /)
+       /analysis
+       /methodology
+   CORRECTION (review round 1): the previous draft of this evidence claimed a
+   fifth route, /next-steps -> 200. That was a false positive: Streamlit
+   serves the same index.html SPA shell with HTTP 200 for ANY path, so an
+   unregistered path is indistinguishable from a registered one by HTTP
+   status alone (byte-for-byte identical 7459-byte response for
+   /next-steps and /nonexistent-route-xyz). Route existence is determined by
+   the st.Page registrations in the committed app.py, which at 358c6b6
+   register exactly the three pages above. The next-steps page belongs to
+   Card 4 (PR #20, commit 55912b2) and is NOT present in this branch's base
+   (origin/main 781b966); it was never on this card's tree.
 5. `git diff --check` clean; only requirements.txt + README.md +
    docs/decisions.md changed (plus this evidence file).
 
