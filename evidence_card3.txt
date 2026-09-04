@@ -267,4 +267,3 @@ Verification (round 3):
 * Real server boots with the worktree warehouse; /_stcore/health 200 and all
   three pages serve HTTP 200.
 * git diff --check clean.
-
