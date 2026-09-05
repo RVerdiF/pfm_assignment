@@ -111,9 +111,37 @@ def render() -> None:
         "is, **how** a conversion is attributed to a session, **how much** of "
         "the sample can be attributed and why the rest cannot, and **what that "
         "means** for reporting revenue and commission by channel. The pages "
-        "are ordered as that story: Overview (context + architecture), "
-        "Attribution analysis (observed results), and Methodology and "
-        "limitations (method, production design, investigation plan, caveats)."
+        "are grouped as the assignment's two areas: **Area 1 — Attribution & "
+        "data modeling** (Overview, Attribution analysis, Methodology and "
+        "limitations) and **Area 2 — Investigation, integration & monitoring** "
+        "(Investigation & monitoring, Data quality monitoring, QuickBooks "
+        "reconciliation, What I'd do next)."
+    )
+
+    st.subheader("How the pages map to the assignment")
+    st.markdown(
+        "- **Area 1 — Attribution & data modeling** — the executable sample "
+        "and its architecture (Overview), the observed results on the "
+        "anonymised sample (Attribution analysis), and the attribution "
+        "method, production identity design, and limitations (Methodology "
+        "and limitations)."
+    )
+    st.markdown(
+        "- **Area 2 — Investigation, integration & monitoring** — the "
+        "reported 18% gap with the production investigation queries and "
+        "hypotheses (Investigation & monitoring), the five data quality "
+        "checks with thresholds and P1/P2/P3 on-call routing (Data quality "
+        "monitoring), the QuickBooks → BigQuery → dbt reconciliation design "
+        "(QuickBooks reconciliation), and the production evolution outline "
+        "(What I'd do next). The Area 2 pages are design-only: they read no "
+        "warehouse relation."
+    )
+    st.write(
+        "The reported production gap of 18% is the thread that connects the "
+        "two areas: Area 1 explains how attribution should work and why "
+        "conversions go unmatched; Area 2 opens with the investigation of "
+        "that gap and defines how the pipeline would be monitored, "
+        "reconciled, and evolved so the gap is detected and closed."
     )
 
     st.subheader("The reported production problem")
@@ -122,8 +150,8 @@ def render() -> None:
         "TrackNow conversions in the last 30 days have no matching PostHog "
         "session. That figure is an input premise of this exercise — it "
         "describes the production tracking stack, not the delivered file — "
-        "and it is the subject of the investigation plan on the Methodology "
-        "page. It is never re-derived from the sample."
+        "and it is the subject of the Investigation & monitoring page in "
+        "Area 2. It is never re-derived from the sample."
     )
 
     connection = require_connection()
@@ -177,7 +205,8 @@ def render() -> None:
         "re-implements joins or business rules: it reads only the published "
         "marts plus the single `intermediate.int_unmatched_conversions` "
         "diagnostic view that explains why a conversion was not matched "
-        "(see the Attribution analysis and Methodology pages)."
+        "(see the Attribution analysis and Investigation & monitoring "
+        "pages)."
     )
 
     st.subheader("Relations this walkthrough reads")

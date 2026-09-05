@@ -60,12 +60,16 @@ def test_pages_cite_the_reported_production_gap_as_premise() -> None:
     """The 18% figure appears only as the reported production premise."""
     overview = _read("streamlit", "sections", "overview.py")
     methodology = _read("streamlit", "sections", "methodology.py")
+    investigation = _read("streamlit", "sections", "investigation.py")
     assert "18%" in overview
     assert "Reported production issue" in overview
     assert "Reported production gap" in overview
     assert "never re-derived from the sample" in overview
     assert "18%" in methodology
     assert "assignment premise" in methodology
+    # The relocated investigation narrative keeps the premise framing.
+    assert "assignment premise" in investigation
+    assert "never " in investigation and "re-derived" in investigation
     # The 18% must not be derived from any warehouse relation on the pages.
     assert "unmatched_rate * 18" not in overview
     assert "0.18" not in overview
@@ -152,7 +156,7 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     (which TrackNow's staging schema does not carry), and never an identity
     bridge (affiliate_session_id = PostHog.session_id).
     """
-    from sections.methodology import INVESTIGATION_QUERIES
+    from sections.investigation import INVESTIGATION_QUERIES
 
     title, purpose, sketch = next(
         (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 4"))
@@ -174,3 +178,151 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     # The prose tells the reader where the dimensions come from.
     assert "TrackNow" in purpose
     assert "documented" in purpose.lower() or "firm" in purpose.lower()
+
+
+def test_investigation_query_3_counts_dangling_bridge_sessions_as_unmatched() -> None:
+    """Query 3's unmatched definition matches Queries 1/4: no PostHog session.
+
+    A bridge row can carry a session_id that no longer exists in PostHog;
+    counting those as matched (countif(bridge.session_id is null)) would
+    contradict the reported-gap premise. Query 3 must therefore resolve the
+    PostHog session through the bridge and count rows without a live
+    PostHog session (ph.session_id is null) as unmatched.
+    """
+    from sections.investigation import INVESTIGATION_QUERIES
+
+    title, purpose, sketch = next(
+        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 3"))
+    )
+    lowered = sketch.lower()
+
+    # PostHog is joined through the bridge, so a dangling bridge session_id
+    # fails the match just like a missing bridge record.
+    assert "left join posthog.sessions ph" in lowered
+    assert "on ph.session_id = bridge.session_id" in lowered
+    # The unmatched count/rate use the live-session definition.
+    assert "countif(ph.session_id is null)" in lowered
+    # The wrong semantic (bridge-presence mistaken for a PostHog match).
+    assert "countif(bridge.session_id is null)" not in lowered
+    # It is still the by-channel breakdown.
+    assert "bridge.acquired_channel" in lowered
+    assert "group by bridge.acquired_channel" in lowered
+
+
+def test_investigation_query_2_resolution_uses_live_posthog_session() -> None:
+    """Query 2's unresolved metric must test the live PostHog session.
+
+    "Carries an identifier yet fails to resolve a PostHog session" means the
+    bridge's session_id is absent OR dangling (no row in PostHog). Testing
+    only bridge.session_id presence would count a dangling bridge session_id
+    as resolved, contradicting the reported-gap semantics of Queries 1/3/4.
+    The separate bridge-presence coverage metric must be preserved.
+    """
+    from sections.investigation import INVESTIGATION_QUERIES
+
+    title, purpose, sketch = next(
+        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 2"))
+    )
+    lowered = sketch.lower()
+
+    # PostHog is joined through the bridge so dangling session_ids fail.
+    assert "left join posthog.sessions ph" in lowered
+    assert "on ph.session_id = bridge.session_id" in lowered
+    # The unresolved metric is gated on bridge presence AND no live session.
+    assert (
+        "countif(bridge.click_id is not null\n"
+        "          and ph.session_id is null)" in lowered
+    )
+    # The wrong semantic (bridge session_id presence as the resolution test).
+    assert "and bridge.session_id is null)" not in lowered
+    # The bridge-presence coverage metric remains, unchanged in meaning.
+    # (Checked token-wise: the gate variant carries a newline before the
+    # closing paren, so the exact match only hits the coverage metric.)
+    assert "countif(bridge.click_id is not null)" in lowered
+    assert "with_bridge_record" in lowered
+    # The prose describes the live-session semantic.
+    assert "live posthog session" in purpose.lower()
+    assert "dangling" in purpose.lower()
+
+
+def test_readme_scope_boundary_distinguishes_premise_from_sample() -> None:
+    """README's scope note must not deny showing the 18% production premise.
+
+    The README and Streamlit deliberately present the assignment-provided
+    18% reported production gap, so the "not implemented" boundary must say
+    that no production data is delivered/queried and that executable metrics
+    come from the sample — not that every shown number is sample-derived.
+    """
+    readme = _read("README.md")
+    # The contradictory universal claim must not return.
+    assert "every number shown comes from the anonymised sample" not in readme
+    # The 18% premise appears in the README (reported production gap).
+    assert "18%" in readme
+    assert "assignment premise" in readme
+    # The corrected scope boundary distinguishes the two populations.
+    assert "assignment-provided reported premise" in readme
+    assert "not a number computed here" in readme
+    # The Streamlit side keeps the premise framing (18% shown on purpose).
+    investigation = _read("streamlit", "sections", "investigation.py")
+    assert "assignment premise" in investigation
+
+
+def test_monitoring_pages_keep_the_18_percent_as_reported_gap() -> None:
+    """The monitoring design treats 18% as the reported gap, not an SLA.
+
+    The card forbids hardcoding the reported production gap as a definitive
+    threshold: the check baseline must come from recent history, and the
+    thresholds must be configuration.
+    """
+    monitoring = _read("streamlit", "sections", "monitoring_design.py")
+    doc = _read("docs", "commission_monitoring_design.md")
+    for source in (monitoring, doc):
+        # Normalise markdown emphasis so bold prose does not dodge the guard.
+        source = source.replace("**", "")
+        # The figure may only be cited as the reported/observed production
+        # gap, never as a fixed production truth or an SLA anchor: wherever
+        # it appears, the not-an-SLA disclaimer appears in the same source.
+        if "18%" in source:
+            assert "not a hardcoded SLA" in source
+            assert "reported" in source or "observed" in source
+        assert "baseline" in source
+
+
+def test_sample_100_percent_unmatched_stays_a_sample_observation() -> None:
+    """The sample's 0% match rate must never be stated as production truth."""
+    for name in ["overview.py", "analysis.py", "methodology.py", "monitoring_design.py"]:
+        source = _read("streamlit", "sections", name)
+        assert "production unmatched rate = 100%" not in source.lower()
+        assert "production unmatched rate is 100%" not in source.lower()
+        assert "100% unmatched in production" not in source.lower()
+    # The overview states the sample outcome as a property of the sample file.
+    overview = _read("streamlit", "sections", "overview.py")
+    assert "a factual property of this file" in overview
+
+
+def test_monitoring_pages_are_design_only() -> None:
+    """The monitoring/reconciliation pages never claim implemented infrastructure."""
+    for name in ["monitoring_design.py", "quickbooks_reconciliation.py", "next_steps.py"]:
+        source = _read("streamlit", "sections", name)
+        assert "implemented in this repository" in source
+    # And the monitoring design doc states the same boundary up front.
+    doc = _read("docs", "commission_monitoring_design.md")
+    assert "design only" in doc.lower()
+    assert "Nothing in this document is provisioned" in doc
+
+
+def test_methodology_edge_cases_cover_the_assignment_minimum() -> None:
+    """At least four attribution edge cases, each with failure and handling."""
+    from sections.methodology import EDGE_CASES
+
+    assert len(EDGE_CASES) >= 4
+    for case, when, handling in EDGE_CASES:
+        assert case and when and handling
+    names = {case for case, _, _ in EDGE_CASES}
+    # The card's required set.
+    assert "Missing click_id on conversion" in names
+    assert "Cross-session conversion" in names
+    assert "Cookie reset / cross-device / incognito" in names
+    assert "Multiple paid clicks before conversion" in names
+    assert "Redirect strips parameters" in names
+    assert "Late-arriving data" in names

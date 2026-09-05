@@ -9,9 +9,18 @@ required relation is absent, it runs the canonical pipeline (ingestion then
 read-only. All attribution decisions and business joins live in dbt; the
 Streamlit code never re-implements them.
 
-Pages: Overview, Attribution analysis, Methodology and limitations, and the
-closing "What I'd do next" (a pure-prose production-evolution outline; it
-reads no warehouse relation). Launch from the repository root:
+Pages follow the two assignment areas:
+
+- **Area 1 — Attribution & Data Modeling**: Overview, Attribution analysis,
+  Methodology and limitations.
+- **Area 2 — Investigation, Integration & Monitoring**: Investigation &
+  monitoring (the reported 18% gap, the production investigation queries and
+  hypotheses), Data quality monitoring design, QuickBooks reconciliation
+  pipeline (pure-prose, design-only pages that read no warehouse relation),
+  closing with the "What I'd do next" production-evolution outline (also
+  pure prose).
+
+Launch from the repository root:
 
     streamlit run streamlit/app.py
 """
@@ -28,13 +37,15 @@ STREAMLIT_DIR = Path(__file__).resolve().parent
 if str(STREAMLIT_DIR) not in sys.path:
     sys.path.insert(0, str(STREAMLIT_DIR))
 
-from sections import (
+from sections import (  # noqa: E402
     analysis,
+    investigation,
     methodology,
+    monitoring_design,
     next_steps,
     overview,
     quickbooks_reconciliation,
-)  # noqa: E402
+)
 
 
 def main() -> None:
@@ -44,34 +55,48 @@ def main() -> None:
         layout="wide",
     )
 
-    pages = [
-        st.Page(
-            overview.render,
-            title="Overview",
-            url_path="overview",
-            default=True,
-        ),
-        st.Page(
-            analysis.render,
-            title="Attribution analysis",
-            url_path="analysis",
-        ),
-        st.Page(
-            methodology.render,
-            title="Methodology and limitations",
-            url_path="methodology",
-        ),
-        st.Page(
-            next_steps.render,
-            title="What I'd do next",
-            url_path="next-steps",
-        ),
-        st.Page(
-            quickbooks_reconciliation.render,
-            title="QuickBooks reconciliation",
-            url_path="quickbooks-reconciliation",
-        ),
-    ]
+    pages = {
+        "Area 1 — Attribution & data modeling": [
+            st.Page(
+                overview.render,
+                title="Overview",
+                url_path="overview",
+                default=True,
+            ),
+            st.Page(
+                analysis.render,
+                title="Attribution analysis",
+                url_path="analysis",
+            ),
+            st.Page(
+                methodology.render,
+                title="Methodology and limitations",
+                url_path="methodology",
+            ),
+        ],
+        "Area 2 — Investigation, integration & monitoring": [
+            st.Page(
+                investigation.render,
+                title="Investigation & monitoring",
+                url_path="investigation-monitoring",
+            ),
+            st.Page(
+                monitoring_design.render,
+                title="Data quality monitoring",
+                url_path="monitoring-design",
+            ),
+            st.Page(
+                quickbooks_reconciliation.render,
+                title="QuickBooks reconciliation",
+                url_path="quickbooks-reconciliation",
+            ),
+            st.Page(
+                next_steps.render,
+                title="What I'd do next",
+                url_path="next-steps",
+            ),
+        ],
+    }
     navigation = st.navigation(pages)
     navigation.run()
 

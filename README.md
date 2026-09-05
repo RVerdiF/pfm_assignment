@@ -5,6 +5,36 @@ and mart consumption. The warehouse is DuckDB, dbt owns the transformation
 layers, and Streamlit is a thin read-only consumer of the published marts (plus
 the single ADR-8 diagnostic intermediate view).
 
+## What this submission contains
+
+- An executable local sample pipeline (Excel → DuckDB raw → dbt staging /
+  intermediate / marts → Streamlit walkthrough).
+- A dbt attribution model with deterministic exact-click-id rules and its
+  sample diagnostics (unmatched reasons, attribution health).
+- The production attribution design: identifier contract, identity flow, and
+  edge cases.
+- The 18% reported-gap investigation plan (diagnostic queries + hypotheses).
+- A BigQuery commission anomaly query (`sql/bigquery/commission_anomalies.sql`).
+- A QuickBooks → BigQuery → dbt reconciliation architecture
+  (`docs/quickbooks_reconciliation_design.md`, design only).
+- A data quality monitoring design: five checks, thresholds, P1/P2/P3
+  severities, and on-call routing
+  (`docs/commission_monitoring_design.md`, design only).
+- A Streamlit walkthrough organised around the assignment's two areas.
+
+## What is not implemented
+
+- No real BigQuery deployment, Airbyte connection, or QuickBooks API access.
+- No production data is delivered or queried — all executable metrics come
+  from the anonymised sample. The 18% production-gap figure is an
+  assignment-provided reported premise, not a number computed here.
+- No actual alerting infrastructure (no Slack/paging integration, no dbt
+  Cloud job, no Cloud Monitoring alerts).
+
+This boundary is deliberate scope control: the delivered pipeline runs
+locally and self-contained, and every production design is labelled as
+design-only.
+
 ## Pipeline
 
 ```text
@@ -26,7 +56,7 @@ dbt intermediate  (attribution candidates -> deterministic attribution -> unmatc
 dbt marts  (fct_revenue_attribution, fct_commission_daily_local, mart_attribution_health)
         |
         v
-consumers  (EDA notebook, Streamlit app, BigQuery consumption query)
+consumers  (EDA notebook, Streamlit walkthrough, BigQuery consumption query)
 ```
 
 ## Requirements
@@ -237,9 +267,11 @@ walkthrough pages — see the reproducible-bootstrap section above.
 
 ### Pages and relations
 
-The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
-`Methodology and limitations`) that read only the published consumer
-relations — the three marts and the single diagnostic intermediate view:
+The walkthrough is organised around the assignment's two areas. **Area 1 —
+Attribution & data modeling** holds the data-reading pages (`Overview`,
+`Attribution analysis`, `Methodology and limitations`), which read only the
+published consumer relations — the three marts and the single diagnostic
+intermediate view:
 
 - the Overview page explains the assignment problem in prose, separates the
   two populations the exercise talks about — the reported production gap
@@ -256,7 +288,7 @@ relations — the three marts and the single diagnostic intermediate view:
 - `marts.mart_attribution_health` for daily/source attribution monitoring;
 - `marts.fct_commission_daily_local` for the clearly labelled local commission
   proxy;
-- the Methodology and limitations page is organised in four parts: the
+- the Methodology and limitations page is organised in three parts: the
   production attribution design (the intended identity flow from ad click to
   TrackNow conversion, with the role of each identifier — `gclid`/`fbclid`,
   `click_id`, `affiliate_session_id`, `distinct_id`, `session_id` — and the
@@ -264,16 +296,48 @@ relations — the three marts and the single diagnostic intermediate view:
   attribution rules in plain language — exact click-id matching, temporal
   window, identifier priority, recency tie-break, and the matched /
   ambiguous / unmatched outcomes — stated as a sample constraint, not the
-  production architecture), the investigation of the reported 18% gap (six
-  pseudo-BigQuery diagnostic queries and six hypotheses, each with a test
-  and a fix, plus the root-cause boundary statement), and the limitations
-  with recommendations. The observed-results interpretation reads totals
-  live from the health mart, the revenue mart, and the diagnostic reason
-  view; the warehouse-specific limitation figures — the decided/valid
-  conversion counts, the conversion-date span, and the outside-window count
-  — are read live from those same relations, never from fixed
-  delivered-sample totals, so a custom warehouse is not contradicted. The
-  reported 18% is never re-derived from any relation.
+  production architecture), and the limitations with recommendations (each
+  citing the live loss cause it addresses). The investigation of the
+  reported 18% gap (six pseudo-BigQuery diagnostic queries and six
+  hypotheses, each with a test and a fix, plus the root-cause boundary
+  statement) lives on the Area 2 `Investigation & monitoring` page. The
+  observed-results interpretation reads totals live from the health mart,
+  the revenue mart, and the diagnostic reason view; the warehouse-specific
+  limitation figures — the decided/valid conversion counts, the
+  conversion-date span, and the outside-window count — are read live from
+  those same relations, never from fixed delivered-sample totals, so a
+  custom warehouse is not contradicted. The reported 18% is never re-derived
+  from any relation.
+- the closing `What I'd do next` page is a short, architecture-oriented
+  production-evolution outline (BigQuery as the managed warehouse with the
+  same dbt `raw -> staging -> intermediate -> marts` shape, dbt-bigquery as
+  the adapter, Cloud Storage as the landing zone, Cloud Run Jobs / Cloud
+  Build for execution and scheduling, Terraform for datasets/service
+  accounts/IAM/buckets, GitHub Actions for CI/CD, and Cloud Monitoring for
+  freshness/failure/match-rate/unmatched-reason observability). It is pure
+  prose: it reads no warehouse relation, renders no chart, and explicitly
+  states that none of that production infrastructure exists in this
+  repository — the delivered solution stays local and self-contained.
+
+**Area 2 — Investigation, integration & monitoring** holds the pure-prose
+design pages; they read no warehouse relation:
+
+- the `Investigation & monitoring` page carries the area's investigation
+  narrative: the reported 18% gap (the assignment premise, never re-derived
+  from the sample), the six pseudo-BigQuery diagnostic queries that would run
+  against production, and the six hypotheses with a test and a fix each,
+  closing with the root-cause boundary statement — plus a map of the six
+  area elements pointing to the companion design pages;
+- the `Data quality monitoring` page presents the five data quality checks
+  for the commission pipeline — what each validates, its threshold, its
+  P1/P2/P3 severity, its implementation, and the on-call notification — plus
+  the alerting flow (monitoring table -> threshold evaluation ->
+  Slack/paging), the alert payload, and the monitoring architecture. It is
+  the Streamlit rendering of `docs/commission_monitoring_design.md`;
+- the `QuickBooks reconciliation` page presents the reconciliation pipeline
+  design (`docs/quickbooks_reconciliation_design.md`): layers and grains,
+  the firm mapping strategy, the reconciliation status taxonomy, and the
+  per-layer DQ checks.
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads
@@ -289,11 +353,94 @@ diagnostic `int_unmatched_conversions` view.
 
 ## BigQuery consumption asset
 
-`sql/bigquery/attribution_health.sql` is a BigQuery-compatible read-only
-consumer query over the published `marts.mart_attribution_health` relation.
-Replace the `project_id` placeholder with the target GCP project before
-execution. It does not deploy infrastructure or reimplement the dbt
+`sql/bigquery/commission_anomalies.sql` is the primary BigQuery consumption
+asset. It is a BigQuery Standard SQL anomaly-detection query over the
+authoritative production `analytics_core.f_commission_daily` relation,
+producing per firm-day commission, a 7-day rolling average (current row
+excluded), the percentage change vs that average, and an `anomaly` flag for
+absolute swings greater than 40%. Replace the `project_id` placeholder with the
+target GCP project before execution.
+
+`sql/bigquery/optional_attribution_health.sql` is a secondary, optional read
+over the local `marts.mart_attribution_health` monitoring mart; it is a
+material complement, not the production anomaly query.
+
+Neither asset deploys GCP infrastructure or reimplements the dbt
 transformation logic.
+
+## Production commission architecture
+
+The authoritative commission source is a **Google Sheet** maintained by the
+business. The planned production pipeline that consumes it is:
+
+```text
+Google Sheet commission
+        │
+        ▼
+Airbyte (ingestion)
+        │
+        ▼
+BigQuery raw          raw.google_sheets_commission_daily
+        │
+        ▼
+dbt staging           stg_commission_daily
+        │                 grain: (commission_date, firm_id)
+        │                 transforms: types, firm_id normalization,
+        │                   currency validation, duplicate detection,
+        │                   null checks
+        ▼
+intermediate          int_tracknow_commission_reconciliation
+        │                 grain: (commission_date, firm_id)
+        │                 fields: TrackNow-derived commission, official
+        │                   Google Sheet commission, absolute delta,
+        │                   pct delta, reconciliation status
+        ▼
+marts                 analytics_core.f_commission_daily
+                          (or its local alias fct_commission_daily)
+                          the official reporting-layer target
+```
+
+### Local sample vs production source
+
+The local repository delivers `marts.fct_commission_daily_local`, a **proxy**
+derived from the TrackNow `referral_bonus_gbp` field in the delivered
+`data/source.xlsx` sample. That proxy exists to demonstrate the pipeline shape
+and the Streamlit consumer with real, queryable numbers. It is **not** the
+authoritative source: the authoritative Google Sheet → Airbyte → BigQuery
+source was never provided. Not the authoritative production commission
+source; reporting, reconciliation, and anomaly detection in production must
+use `analytics_core.f_commission_daily`; the local proxy is a development
+stand-in only.
+
+### Staging model contract
+
+- **Model:** `stg_commission_daily`
+- **Grain:** one row per `(commission_date, firm_id)`
+- **Fields:**
+  - `commission_date`
+  - `firm_id` (normalized)
+  - `firm_name`
+  - `commission_amount`
+  - `sales_amount`
+  - `ingestion_timestamp`
+- **Responsibilities:** types, firm_id normalization, currency validation,
+  duplicate detection, null checks.
+
+### Intermediate / reconciliation contract
+
+- **Model:** `int_tracknow_commission_reconciliation`
+- **Grain:** one row per `(commission_date, firm_id)`
+- **Fields:**
+  - TrackNow-derived commission (local proxy)
+  - Official Google Sheet commission (production source)
+  - Absolute delta
+  - Pct delta
+  - Reconciliation status
+- **Rule:** the official Google Sheet value has precedence in the reporting
+  layer when the two sources disagree.
+
+None of this production GCP infrastructure exists in this repository; the
+delivered pipeline remains local and self-contained.
 
 ## Repository layout
 
@@ -314,12 +461,15 @@ notebooks/README.md                How to run the EDA and what it found
 requirements.txt                   Pinned runtime deps for the Community Cloud deploy
 pyproject.toml                     Project manifest for local development (PEP 621)
 docs/decisions.md                  Closed project decisions (ADR-lite)
-sql/bigquery/attribution_health.sql  BigQuery mart consumption query
+sql/bigquery/commission_anomalies.sql  BigQuery anomaly query over `analytics_core.f_commission_daily`
+sql/bigquery/optional_attribution_health.sql  Optional BigQuery read over `marts.mart_attribution_health`
 docs/quickbooks_reconciliation_design.md  Area 2 design: QuickBooks -> Airbyte -> BigQuery -> dbt reconciliation -> alerts (design only)
+docs/commission_monitoring_design.md  Area 2 design: five data quality checks, thresholds, P1/P2/P3 severities, on-call routing (design only)
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
 streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
-streamlit/sections/                Walkthrough pages (overview, analysis, methodology)
+streamlit/sections/                Walkthrough pages (overview, analysis, methodology, investigation, monitoring_design, quickbooks_reconciliation, next_steps)
 tests/                             pytest suites (ingestion, bootstrap, structure)
+tests/sql/                         Static checks on the BigQuery SQL assets
 warehouse/pfm.duckdb               Generated local warehouse (ignored)
 ```
 
@@ -337,3 +487,8 @@ warehouse/pfm.duckdb               Generated local warehouse (ignored)
   alert pipeline, with per-layer grains, the
   `dim_firm_accounting_mapping` bridge, the reconciliation status taxonomy,
   and DQ checks per layer.
+- `docs/commission_monitoring_design.md` — Area 2 design answer: the five
+  data quality checks for the commission pipeline (source freshness,
+  conversion grain, attribution unmatched-rate regression, reconciliation
+  variance, mapping coverage) with thresholds, P1/P2/P3 severities, alert
+  routing, and which check to build first.
