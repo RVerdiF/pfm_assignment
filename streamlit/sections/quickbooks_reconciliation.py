@@ -26,40 +26,29 @@ DESIGN_INTRO = (
     "this view summarizes the operational flow."
 )
 
-# The two-sided architecture the card asks for. One line per side, converging
-# on the reconciliation model.
-PIPELINE_DIAGRAM = """QuickBooks Online
-    |
-    v
-Airbyte source (QuickBooks Online connector, incremental,
-cursor MetaData.LastUpdatedTime, PK Id, daily)
-    |
-    v
-BigQuery  raw_quickbooks.invoices  (raw, one row per raw invoice
-record/version; staging dedupes, raw never does)
-    |
-    v
-dbt  stg_quickbooks_invoices  (one row per current invoice)
-    |                                TrackNow
-    |                                raw.tracknow_checkouts
-    |                                    |
-    |                                dbt stg_tracknow_checkouts
-    |                                    |
-    |                                dbt fct_commission_daily
-    |                                (one row per commission_date, firm_id)
-    |                                    |
-    +------------------------------------+
-    |
-    v
-dbt  int_quickbooks_tracknow_reconciliation
-    |   (one row per invoice x firm, with period_start/period_end)
-    |
-    v
-dbt  mart_finance_reconciliation_alerts
-    |   (one row per active reconciliation failure)
-    |
-    v
-Slack / PagerDuty / email"""
+# The two-sided architecture converging on the reconciliation model.
+RECONCILIATION_MERMAID = """\
+flowchart TD
+    subgraph QuickBooks["QuickBooks"]
+        qbo["QuickBooks Online"]
+        airbyte["Airbyte source<br/>(QuickBooks Online connector, daily incremental)"]
+        raw_qb["BigQuery raw_quickbooks.invoices"]
+        stg_qb["dbt stg_quickbooks_invoices<br/>(one row per current invoice)"]
+        qbo --> airbyte --> raw_qb --> stg_qb
+    end
+
+    subgraph TrackNow["TrackNow"]
+        raw_tn["raw.tracknow_checkouts"]
+        stg_tn["dbt stg_tracknow_checkouts"]
+        fct_comm["dbt fct_commission_daily<br/>(one row per commission_date, firm_id)"]
+        raw_tn --> stg_tn --> fct_comm
+    end
+
+    stg_qb --> recon["dbt int_quickbooks_tracknow_reconciliation<br/>(one row per invoice x firm)"]
+    fct_comm --> recon
+    recon --> alert_mart["dbt mart_finance_reconciliation_alerts<br/>(active failures)"]
+    alert_mart --> notify["Slack / PagerDuty / email"]
+"""
 
 # layer, relation, grain, purpose
 LAYER_TABLE = (
@@ -179,7 +168,7 @@ def render() -> None:
     st.write(DESIGN_INTRO)
 
     st.subheader("Architecture")
-    st.code(PIPELINE_DIAGRAM, language=None)
+    st.mermaid_chart(RECONCILIATION_MERMAID, width="stretch")
 
     st.subheader("Layers, relations, and grains")
     st.table(

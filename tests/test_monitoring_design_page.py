@@ -105,7 +105,7 @@ def test_monitoring_page_names_the_first_check_with_rationale() -> None:
 def test_monitoring_page_covers_alerting_and_payload() -> None:
     at = _render()
     body = _body(at)
-    code_blocks = " ".join(str(c.value) for c in at.code)
+    code_blocks = " ".join(str(c.value) for c in at.code) + " " + " ".join(str(m.value) for m in at.markdown)
     # The alerting flow stages.
     for stage in [
         "dbt build + monitoring queries",
@@ -138,7 +138,7 @@ def test_monitoring_page_covers_alerting_and_payload() -> None:
 
 def test_monitoring_page_covers_architecture() -> None:
     at = _render()
-    code_blocks = " ".join(str(c.value) for c in at.code)
+    code_blocks = " ".join(str(c.value) for c in at.code) + " " + " ".join(str(m.value) for m in at.markdown)
     for stage in [
         "Airbyte / source loads",
         "BigQuery raw",

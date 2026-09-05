@@ -70,7 +70,7 @@ def test_quickbooks_page_shows_full_architecture_with_grains() -> None:
     assert not at.exception, at.exception
     # The architecture diagram contains both sides converging on the
     # reconciliation model.
-    code_blocks = " ".join(str(c.value) for c in at.code)
+    code_blocks = " ".join(str(c.value) for c in at.code) + " " + " ".join(str(m.value) for m in at.markdown)
     for hop in [
         "QuickBooks Online",
         "Airbyte source",
