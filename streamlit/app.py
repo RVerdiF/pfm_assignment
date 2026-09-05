@@ -28,7 +28,13 @@ STREAMLIT_DIR = Path(__file__).resolve().parent
 if str(STREAMLIT_DIR) not in sys.path:
     sys.path.insert(0, str(STREAMLIT_DIR))
 
-from sections import analysis, methodology, next_steps, overview  # noqa: E402
+from sections import (
+    analysis,
+    methodology,
+    next_steps,
+    overview,
+    quickbooks_reconciliation,
+)  # noqa: E402
 
 
 def main() -> None:
@@ -59,6 +65,11 @@ def main() -> None:
             next_steps.render,
             title="What I'd do next",
             url_path="next-steps",
+        ),
+        st.Page(
+            quickbooks_reconciliation.render,
+            title="QuickBooks reconciliation",
+            url_path="quickbooks-reconciliation",
         ),
     ]
     navigation = st.navigation(pages)
