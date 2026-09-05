@@ -276,7 +276,7 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
 
     # The six hypotheses, each with a Test and a Fix bullet.
     for phrase in [
-        "Hypothesis 1 — Identifier lost before TrackNow",
+        "Hypothesis 1 — Identifier lost before the bridge",
         "Hypothesis 2 — Cross-session conversion",
         "Hypothesis 3 — Cross-device / cookie reset / incognito",
         "Hypothesis 4 — Redirect stripping / affiliate integration issue",
@@ -289,8 +289,8 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
 
     # The root-cause boundary is stated, and the 18% is framed as premise.
     assert (
-        "The exact production root cause cannot be proven from the delivered "
-        "anonymised sample" in body
+        "The provided anonymised sample does not contain a deterministic "
+        "cross-system identity overlap" in body
     )
     assert "18% of TrackNow" in body
     assert "assignment premise" in body
