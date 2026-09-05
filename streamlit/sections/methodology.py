@@ -238,18 +238,22 @@ INVESTIGATION_QUERIES = (
         "unmatched share before any breakdown is trusted.",
         """\
 -- Trend and temporal concentration of the reported gap.
--- Joins the production attribution bridge to PostHog sessions.
+-- Verifies the PostHog session actually exists, not just that the bridge
+-- resolved a session_id: TrackNow LEFT JOIN bridge LEFT JOIN PostHog,
+-- unmatched = ph.session_id IS NULL.
 select
-  conversion_date,
+  t.conversion_date,
   count(*)                                                      as conversions,
-  countif(bridge.session_id is null)                            as unmatched,
-  countif(bridge.session_id is null) / count(*)                 as unmatched_rate
+  countif(ph.session_id is null)                                as unmatched,
+  countif(ph.session_id is null) / count(*)                     as unmatched_rate
 from tracknow.conversions t
 left join attribution.bridge bridge
   on bridge.click_id = t.click_id
+left join posthog.sessions ph
+  on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-group by conversion_date
-order by conversion_date;""",
+group by t.conversion_date
+order by t.conversion_date;""",
     ),
     (
         "Query 2 — Identifier coverage",
@@ -289,30 +293,31 @@ group by bridge.acquired_channel
 order by unmatched desc;""",
     ),
     (
-        "Query 4 — Gap by device / browser / country",
-        "Look for privacy-driven patterns behind the unmatched conversions: "
-        "Safari/iOS, mobile, specific regions, consent-banner outcomes, and "
-        "browser privacy features that suppress client-side collection. The "
-        "PostHog session is missing by definition on the unmatched rows, so "
-        "every dimension is sourced from the TrackNow conversion and the "
-        "attribution bridge record — never from the PostHog session row.",
+        "Query 4 — Gap by TrackNow-side dimensions",
+        "Break the unmatched cohort down by the TrackNow conversion's own "
+        "dimensions: firm, trading platform, and first-order status. A gap "
+        "concentrated in a specific firm or platform points at that partner's "
+        "integration. The PostHog session is missing by definition on the "
+        "unmatched rows, so every dimension comes from the TrackNow conversion "
+        "itself — no PostHog field is sourced, and no column is invented beyond "
+        "the documented TrackNow schema (firm_id, trading_platform, first_order).",
         """\
 -- The unmatched cohort has no PostHog session by definition, so the
--- breakdown dimensions come from the conversion + the bridge record, never
--- from ph.*.
+-- breakdown uses only TrackNow's own documented fields: firm_id,
+-- trading_platform, first_order. No ph.* dimension, no invented telemetry.
 select
-  t.device_type,
-  t.browser,
-  t.os,
-  t.country_code,
-  t.consent_state,
+  t.firm_id,
+  t.trading_platform,
+  t.first_order,
   count(*) as unmatched_conversions
 from tracknow.conversions t
 left join attribution.bridge bridge
   on bridge.click_id = t.click_id
+left join posthog.sessions ph
+  on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-  and bridge.session_id is null     -- the unmatched cohort itself
-group by 1, 2, 3, 4, 5
+  and ph.session_id is null     -- the unmatched cohort itself
+group by 1, 2, 3
 order by unmatched_conversions desc;""",
     ),
     (
@@ -334,20 +339,29 @@ order by session_lag_hours desc;""",
     ),
     (
         "Query 6 — Attribution bridge propagation audit",
-        "Compare the identifier values captured at the affiliate click with "
-        "the values that reappear on the conversion, to catch propagation "
-        "loss inside the attribution bridge.",
+        "Audit whether the identifier captured at the outbound affiliate click "
+        "is the same one that reappears on the conversion. Requires a stable "
+        "click identifier (e.g. event_id or click_ref) that links the outbound "
+        "click to the conversion independently of the attribution bridge. "
+        "Without this documented key, the audit cannot distinguish propagation "
+        "loss from a join miss.",
         """\
+-- Audit: does the click identifier survive from outbound click to conversion?
+-- Requires a stable click key (e.g. event_id, click_ref) that identifies the
+-- same click event across both tables, independent of the attribution bridge.
+-- Without this documented key, this audit cannot run as written.
 select
-  t.click_id is distinct from bridge.click_id                    as click_id_changed,
-  t.affiliate_session_id is distinct from bridge.affiliate_session_id
+  oc.click_id as outbound_click_id,
+  c.click_id  as conversion_click_id,
+  oc.click_id is distinct from c.click_id as click_id_changed,
+  c.affiliate_session_id is distinct from oc.affiliate_session_id
                                                                as session_id_changed,
-  count(*)                                                     as conversions
-from tracknow.conversions t
-join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-where t.created_date >= date_sub(current_date(), interval 30 day)
-group by 1, 2
+  count(*) as conversions
+from tracknow.conversions c
+join tracknow.outbound_clicks oc
+  on oc.event_id = c.event_id   -- hypothetical stable click key
+where c.created_date >= date_sub(current_date(), interval 30 day)
+group by 1, 2, 3, 4
 order by conversions desc;""",
     ),
 )

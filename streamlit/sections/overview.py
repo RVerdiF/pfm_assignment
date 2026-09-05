@@ -148,11 +148,11 @@ def render() -> None:
         "The delivered workbook is an anonymised, bounded extract: 100 "
         "TrackNow conversions and 200 PostHog sessions. It exists so the "
         "attribution pipeline can be modelled, executed, and inspected "
-        "end to end. The anonymisation does not preserve a deterministic "
-        "cross-system identity bridge, so the local exact-match model "
-        "attributes none of the sample's conversions — a factual property of "
-        "this file, not a measurement of production and not a contradiction "
-        "of the reported 18%."
+        "end to end. The provided anonymised sample does not contain "
+        "deterministic cross-system identifier overlap, so the local "
+        "exact-match model attributes none of the sample's conversions "
+        "— a factual property of this file, not a measurement of "
+        "production and not a contradiction of the reported 18%."
     )
     st.info(
         "Reported production gap: **18%**\n\n"
