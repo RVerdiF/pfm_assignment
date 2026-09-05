@@ -216,6 +216,15 @@ EDGE_CASES = (
         "identifier; pre-login sessions survive the identity transition.",
     ),
     (
+        "Redirect strips parameters",
+        "An affiliate or ad-network redirect drops the click parameters, so "
+        "the landing page never records the identifier the conversion "
+        "carries.",
+        "Redirect QA on every paid link plus server-side parameter "
+        "persistence (capture the click before the redirect chain and "
+        "restore it on the landing session).",
+    ),
+    (
         "Late-arriving data",
         "The two systems land data at different speeds; a conversion is "
         "counted unmatched until the matching PostHog session arrives.",

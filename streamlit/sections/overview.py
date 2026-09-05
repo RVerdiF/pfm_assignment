@@ -111,9 +111,36 @@ def render() -> None:
         "is, **how** a conversion is attributed to a session, **how much** of "
         "the sample can be attributed and why the rest cannot, and **what that "
         "means** for reporting revenue and commission by channel. The pages "
-        "are ordered as that story: Overview (context + architecture), "
-        "Attribution analysis (observed results), and Methodology and "
-        "limitations (method, production design, investigation plan, caveats)."
+        "are grouped as the assignment's two areas: **Area 1 — Attribution & "
+        "data modeling** (Overview, Attribution analysis, Methodology and "
+        "limitations) and **Area 2 — Investigation, integration & monitoring** "
+        "(Data quality monitoring, QuickBooks reconciliation, What I'd do "
+        "next)."
+    )
+
+    st.subheader("How the pages map to the assignment")
+    st.markdown(
+        "- **Area 1 — Attribution & data modeling** — the executable sample "
+        "and its architecture (Overview), the observed results on the "
+        "anonymised sample (Attribution analysis), and the attribution "
+        "method, production identity design, 18% investigation plan, and "
+        "limitations (Methodology and limitations)."
+    )
+    st.markdown(
+        "- **Area 2 — Investigation, integration & monitoring** — the five "
+        "data quality checks with thresholds and P1/P2/P3 on-call routing "
+        "(Data quality monitoring), the QuickBooks → BigQuery → dbt "
+        "reconciliation design (QuickBooks reconciliation), and the "
+        "production evolution outline (What I'd do next). The monitoring "
+        "and reconciliation pages are design-only: they read no warehouse "
+        "relation."
+    )
+    st.write(
+        "The reported production gap of 18% is the thread that connects the "
+        "two areas: Area 1 explains how attribution should work and why "
+        "conversions go unmatched; Area 2 defines how the pipeline would be "
+        "monitored, reconciled, and evolved so that gap is detected and "
+        "closed."
     )
 
     st.subheader("The reported production problem")
