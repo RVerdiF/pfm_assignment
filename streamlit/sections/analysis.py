@@ -25,11 +25,23 @@ here: every number is an aggregate over a relation produced by dbt.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 from warehouse_bootstrap import read_relation
 from sections._components import require_connection
+
+ROOT = Path(__file__).resolve().parents[2]
+SQL_DIR = ROOT / "sql" / "bigquery"
+
+
+def _read_sql_asset(filename: str) -> str:
+    path = SQL_DIR / filename
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    return f"-- SQL asset not found: {filename}"
 
 MART_SCHEMA = "marts"
 
@@ -480,6 +492,27 @@ def _render_commission(connection) -> None:
             "table was not part of the provided data."
         )
         st.dataframe(proxy_table, width="stretch", hide_index=True)
+
+    with st.expander("Production BigQuery: Commission anomaly detection query (Area 1, Question 3)"):
+        st.caption(
+            "This query targets the production contract provided in the assignment "
+            "(`analytics_core.f_commission_daily`) and is not executed locally because "
+            "`analytics_core.f_commission_daily` was not included in the supplied data."
+        )
+        st.markdown(
+            "- **Source**: `analytics_core.f_commission_daily` (production contract: `commission_date`, `firm_id`, `commission_amount`).\n"
+            "- **Trailing 7-day baseline**: calendar-day window (`RANGE BETWEEN 7 PRECEDING AND 1 PRECEDING` via `UNIX_DATE(commission_date)`), strictly excluding current day.\n"
+            "- **Anomaly threshold**: flags absolute swings `|pct_change_vs_7d_avg| > 40%`.\n"
+            "- **Edge cases**: `SAFE_DIVIDE` avoids zero-division on zero/missing baselines; sorted by `absolute_revenue_impact DESC`."
+        )
+        st.code(_read_sql_asset("commission_anomalies.sql"), language="sql")
+
+    with st.expander("BigQuery consumption asset: Attribution health query"):
+        st.caption(
+            "Consumption query over the published `marts.mart_attribution_health` table "
+            "for BigQuery consumers (`sql/bigquery/attribution_health.sql`)."
+        )
+        st.code(_read_sql_asset("attribution_health.sql"), language="sql")
 
 
 def render() -> None:
