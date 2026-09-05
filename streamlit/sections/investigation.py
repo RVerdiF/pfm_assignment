@@ -170,15 +170,46 @@ order by unmatched_conversions desc;""",
         "Measure the lag between the first/paid session, the affiliate "
         "click, and the conversion. Long lags expose conversions lost to "
         "lookback-window expiry or cross-session identity breaks rather "
-        "than to broken click tracking.",
+        "than to broken click tracking. The documented TrackNow contract "
+        "exposes only a date-grain `created_date` — it has no conversion "
+        "timestamp — so the executable part of this sketch runs at the "
+        "documented date grain, and the hour-level lag is shown only as a "
+        "future-production-contract extension: it requires a hypothetical "
+        "`t.conversion_at` conversion timestamp that the supplied TrackNow "
+        "source does not document, so that part cannot run against the "
+        "contract as supplied.",
         """\
+-- Executable part: documented date-grain fields only.
+-- Date-grain lag between the winning session's start and the conversion
+-- date. Finer than a day is impossible today: TrackNow documents only
+-- created_date (no conversion timestamp).
 select
   t.conversion_id,
-  date_diff(t.created_at, bridge.session_start_at, hour)  as session_lag_hours,
-  date_diff(t.created_at, bridge.attribution_generated_at, hour) as bridge_lag_hours
+  date_diff(ph.session_start_at, cast(t.created_date as timestamp), day)
+                                                                as session_lag_days,
+  t.created_date,
+  ph.session_start_at as winning_session_start,
+  ph.session_start_at is null as no_posthog_session
 from tracknow.conversions t
-join attribution.bridge bridge
+left join attribution.bridge bridge
   on bridge.click_id = t.click_id
+left join posthog.sessions ph
+  on ph.session_id = bridge.session_id
+where t.created_date >= date_sub(current_date(), interval 30 day)
+order by session_lag_days desc;
+
+-- Hour-level lag requires a TrackNow conversion timestamp, which the
+-- documented contract does not supply. HYPOTHETICAL FIELD: t.conversion_at
+-- (a future production-contract conversion timestamp; the sketch below
+-- cannot run against the supplied contract until that field exists).
+select
+  t.conversion_id,
+  date_diff(t.conversion_at, ph.session_start_at, hour)  as session_lag_hours
+from tracknow.conversions t
+left join attribution.bridge bridge
+  on bridge.click_id = t.click_id
+left join posthog.sessions ph
+  on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
 order by session_lag_hours desc;""",
     ),

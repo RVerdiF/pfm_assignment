@@ -70,6 +70,47 @@ def test_investigation_page_renders_the_six_diagnostic_queries() -> None:
     assert "posthog.sessions" in code
 
 
+def test_investigation_query_5_respects_the_documented_tracknow_grain() -> None:
+    """Query 5 must not invent a TrackNow conversion timestamp.
+
+    The documented TrackNow contract exposes only date-grain created_date
+    (ingestion/ingestion.md, staging.yml: conversion_date) — there is no
+    created_at or any conversion timestamp at raw level. The page promises
+    that no column is invented, so the executable part of Query 5 must run
+    at the documented date grain, and an hour-level lag may appear only as
+    an explicitly hypothetical future-contract field (t.conversion_at).
+    """
+    from sections.investigation import INVESTIGATION_QUERIES
+
+    title, purpose, sketch = next(
+        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 5"))
+    )
+    lowered = sketch.lower()
+    prose = purpose.lower()
+
+    # No undocumented TrackNow timestamp column anywhere in the sketch.
+    assert "created_at" not in lowered
+    assert "conversion_at" not in lowered.replace("t.conversion_at", "")
+
+    # The executable part runs at the documented date grain.
+    assert "t.created_date" in lowered
+    assert "session_lag_days" in lowered
+
+    # Hour-level lag exists only as an explicitly hypothetical
+    # future-contract field, with its cannot-run boundary stated.
+    assert "hypothetical field: t.conversion_at" in lowered
+    assert "cannot run against the supplied contract" in lowered
+    assert "future-production-contract extension" in prose
+
+    # The lag is measured against the live PostHog session through the
+    # bridge (same live-session semantics as Queries 1-4), not against an
+    # undocumented bridge timestamp column.
+    assert "date_diff(ph.session_start_at" in lowered
+    assert "bridge.session_start_at" not in lowered
+    assert "attribution_generated" not in lowered
+    assert "left join posthog.sessions ph" in lowered
+
+
 def test_investigation_page_renders_hypotheses_with_tests_and_fixes() -> None:
     at = _render()
     body = _body(at)
