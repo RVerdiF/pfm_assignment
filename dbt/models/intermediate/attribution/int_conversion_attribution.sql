@@ -14,7 +14,7 @@
 -- attribution would use an explicit identity contract instead (identifier
 -- capture at the landing, persistence with the PostHog session/distinct_id,
 -- propagation onto the affiliate outbound click, and the TrackNow contract
--- including affiliate_session_id — see docs/decisions.md ADR 3 and ADR 11).
+-- including affiliate_session_id - see docs/decisions.md ADR 3 and ADR 11).
 -- No fuzzy matching, no invented conversion time, and no assumed
 -- affiliate_session_id = session_id bridge is used. The decision is fully
 -- deterministic and is described by four ordered rules:

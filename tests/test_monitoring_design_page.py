@@ -2,8 +2,8 @@
 
 Drives the Area-2 monitoring design section through AppTest.from_file (a real
 Streamlit script that imports the section module). Like the other design
-pages, this section is pure prose by design — it reads no warehouse relation
-and renders no chart — so the checks assert the card's acceptance criteria:
+pages, this section is pure prose by design - it reads no warehouse relation
+and renders no chart - so the checks assert the card's acceptance criteria:
 exactly five checks, each with what it validates, a threshold, a P1/P2/P3
 severity, an implementation, and an on-call notification; the first-check
 rationale; the alerting flow and channels; the alert payload; the monitoring
@@ -43,11 +43,11 @@ def test_monitoring_page_renders_with_five_checks() -> None:
     body = _body(at)
     # Exactly the five checks from the card, each named.
     for check in [
-        "Check 1 — Commission source freshness",
-        "Check 2 — Duplicate / invalid TrackNow conversions",
-        "Check 3 — Attribution unmatched-rate regression",
-        "Check 4 — Commission reconciliation variance",
-        "Check 5 — Firm / accounting mapping coverage",
+        "Check 1 - Commission source freshness",
+        "Check 2 - Duplicate / invalid TrackNow conversions",
+        "Check 3 - Attribution unmatched-rate regression",
+        "Check 4 - Commission reconciliation variance",
+        "Check 5 - Firm / accounting mapping coverage",
     ]:
         assert check in body
     assert "Check 6" not in body
@@ -195,11 +195,11 @@ def test_monitoring_design_doc_exists_with_card_elements_and_readme_link() -> No
     assert DESIGN_DOC.is_file()
     doc = DESIGN_DOC.read_text()
     for element in [
-        "### Check 1 — Commission source freshness",
-        "### Check 2 — Duplicate / invalid TrackNow conversions",
-        "### Check 3 — Attribution unmatched-rate regression",
-        "### Check 4 — Commission reconciliation variance",
-        "### Check 5 — Firm / accounting mapping coverage",
+        "### Check 1 - Commission source freshness",
+        "### Check 2 - Duplicate / invalid TrackNow conversions",
+        "### Check 3 - Attribution unmatched-rate regression",
+        "### Check 4 - Commission reconciliation variance",
+        "### Check 5 - Firm / accounting mapping coverage",
         "P1",
         "P2",
         "P3",

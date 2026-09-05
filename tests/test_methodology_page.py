@@ -101,7 +101,7 @@ def _assert_narrative_matches_relations(
 
     # Caption mirrors the health mart sums exactly.
     assert (
-        f"{decided:,} conversions — {matched:,} matched, "
+        f"{decided:,} conversions - {matched:,} matched, "
         f"{unmatched:,} unmatched, {ambiguous:,} ambiguous."
     ) in captions
 
@@ -165,8 +165,8 @@ def _limitation_facts(database_path: Path) -> dict[str, int | str]:
         con.close()
     return {
         "decided": int(health[0]),
-        "min_date": str(health[1]) if health[1] is not None else "—",
-        "max_date": str(health[2]) if health[2] is not None else "—",
+        "min_date": str(health[1]) if health[1] is not None else "-",
+        "max_date": str(health[2]) if health[2] is not None else "-",
         "valid": int(valid),
         "outside": int(outside),
     }
@@ -412,7 +412,7 @@ def _build_synthetic_warehouse(path: Path, *, include_diagnostic_view: bool = Tr
     3 matched + 5 unmatched + 2 ambiguous); the health mart counts all 12.
 
     ``include_diagnostic_view=False`` builds a warehouse that provides all
-    three marts but omits the ADR-8 diagnostic view — the exact shape the old
+    three marts but omits the ADR-8 diagnostic view - the exact shape the old
     (marts-only) readiness contract accepted and that used to crash at render
     time.
     """

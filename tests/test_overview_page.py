@@ -6,7 +6,7 @@ of this worktree, exposed through the standard PFM_DUCKDB_PATH override.
 
 These checks verify the Card-3 acceptance criteria that live on this page:
 an evaluator understands the problem and the real architecture without opening
-the code — the page explains the context in prose, renders an architecture
+the code - the page explains the context in prose, renders an architecture
 diagram whose labels match the real pipeline stages, and connects read-only to
 the published consumer relations (marts + the ADR-8 diagnostic view).
 """
@@ -40,7 +40,7 @@ def _architecture_diagram_specs(at: AppTest) -> list[str]:
 def test_overview_page_renders_with_real_warehouse() -> None:
     at = _render()
     assert not at.exception, at.exception
-    assert at.title[0].value == "PFM conversion attribution — walkthrough"
+    assert at.title[0].value == "PFM conversion attribution - walkthrough"
     headers = {h.value for h in at.subheader}
     assert "Purpose of this walkthrough" in headers
     assert "Architecture" in headers

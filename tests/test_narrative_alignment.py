@@ -152,7 +152,7 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
 
     The unmatched cohort has no PostHog session by definition, so the query
     that profiles it must use only TrackNow's own documented fields (firm_id,
-    trading_platform, first_order) — never device/browser/os/country/consent
+    trading_platform, first_order) - never device/browser/os/country/consent
     (which TrackNow's staging schema does not carry), and never an identity
     bridge (affiliate_session_id = PostHog.session_id).
     """
@@ -251,7 +251,7 @@ def test_readme_scope_boundary_distinguishes_premise_from_sample() -> None:
     The README and Streamlit deliberately present the assignment-provided
     18% reported production gap, so the "not implemented" boundary must say
     that no production data is delivered/queried and that executable metrics
-    come from the sample — not that every shown number is sample-derived.
+    come from the sample - not that every shown number is sample-derived.
     """
     readme = _read("README.md")
     # The contradictory universal claim must not return.

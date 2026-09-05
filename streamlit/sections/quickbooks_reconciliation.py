@@ -3,8 +3,8 @@
 A pure-prose design page answering Area 2 (Investigation, Integration &
 Monitoring): how QuickBooks invoices would be reconciled against TrackNow
 commission daily in production. Like the "What I'd do next" page, it reads
-no warehouse relation and renders no chart — there is nothing in the
-delivered repo to measure — and it never presents the design as implemented.
+no warehouse relation and renders no chart - there is nothing in the
+delivered repo to measure - and it never presents the design as implemented.
 
 The full contract (raw fields, model SQL sketch, DQ checks, orchestration)
 lives in ``docs/quickbooks_reconciliation_design.md``; the page presents the
@@ -19,7 +19,7 @@ import streamlit as st
 # What the page is: a design answer, not an implementation. Stated once at
 # the top so no section can be read as a shipped integration.
 DESIGN_INTRO = (
-    "**Design only — nothing here is implemented.** This page outlines the daily "
+    "**Design only - nothing here is implemented.** This page outlines the daily "
     "automated reconciliation between QuickBooks invoices and TrackNow commission. "
     "The full technical specification (raw schema, SQL sketches, data quality checks, "
     "and orchestration) is documented in `docs/quickbooks_reconciliation_design.md`; "
@@ -61,7 +61,7 @@ LAYER_TABLE = (
     (
         "Mapping",
         "dim_firm_accounting_mapping",
-        "One row per (firm_id, valid_from) — SCD-style temporal versions",
+        "One row per (firm_id, valid_from) - SCD-style temporal versions",
         "Curated seed bridging QuickBooks customer -> PFM firm; never a name join",
     ),
     (
@@ -112,7 +112,7 @@ STATUS_RULES = (
     ),
     (
         "missing_tracknow",
-        "tracknow_row_count = 0 — invoice whose period contains no TrackNow commission rows (distinguishes no rows from rows summing to zero).",
+        "tracknow_row_count = 0 - invoice whose period contains no TrackNow commission rows (distinguishes no rows from rows summing to zero).",
     ),
     (
         "missing_quickbooks",
@@ -120,7 +120,7 @@ STATUS_RULES = (
     ),
     (
         "matched",
-        "absolute delta <= £5 OR pct delta <= 1% — example tolerance, to validate with Finance (dbt var, never hard-coded).",
+        "absolute delta <= £5 OR pct delta <= 1% - example tolerance, to validate with Finance (dbt var, never hard-coded).",
     ),
     ("variance", "Difference above tolerance."),
 )
@@ -146,8 +146,8 @@ DQ_CHECKS = (
 )
 
 ORCHESTRATION_NOTE = (
-    "I would run dbt only after the Airbyte sync completes successfully — a "
-    "scheduler dependency, never a fixed clock time — then build the staging "
+    "I would run dbt only after the Airbyte sync completes successfully - a "
+    "scheduler dependency, never a fixed clock time - then build the staging "
     "-> reconciliation -> alert chain with its tests "
     "(``dbt build --select stg_quickbooks_invoices+``), and let the "
     "notification step read only ``mart_finance_reconciliation_alerts``."
@@ -185,11 +185,11 @@ def render() -> None:
 
     st.subheader("Reconciliation statuses")
     for status, rule in STATUS_RULES:
-        st.markdown(f"- **`{status}`** — {rule}")
+        st.markdown(f"- **`{status}`** - {rule}")
 
     st.subheader("Data quality checks")
     for layer, checks in DQ_CHECKS:
-        st.markdown(f"- **{layer}** — {checks}")
+        st.markdown(f"- **{layer}** - {checks}")
 
     st.subheader("Orchestration")
     st.write(ORCHESTRATION_NOTE)

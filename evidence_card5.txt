@@ -1,4 +1,4 @@
-Evidence — Card 5 (t_e552e8c9) — Fix the Streamlit Community Cloud deploy
+Evidence - Card 5 (t_e552e8c9) - Fix the Streamlit Community Cloud deploy
 Branch: wt/t_e552e8c9  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main 781b966 (Card 3 head merged via PR #19; Card 4 PR #20 open,
         not part of this card's base per board chain)
@@ -30,7 +30,7 @@ Investigation / root cause (deviates from the card's stated premise)
 
 Fix implemented (the card's own Fallback section, applied)
 ----------------------------------------------------------
-* requirements.txt  (NEW, repository root) — single source of truth for the
+* requirements.txt  (NEW, repository root) - single source of truth for the
   Community Cloud deploy, fully pinned to the versions validated locally in a
   clean Python 3.12 virtualenv:
       polars[excel]==1.44.1
@@ -45,14 +45,14 @@ Fix implemented (the card's own Fallback section, applied)
       streamlit==1.63.0
   Header comment explains the Poetry-vs-requirements resolution so future
   edits do not reintroduce a competing dependency file.
-* README.md — new "Deploying on Streamlit Community Cloud" subsection under
+* README.md - new "Deploying on Streamlit Community Cloud" subsection under
   the Streamlit consumer section: states the root cause, the single
   requirements.txt rule, the Python 3.12 pin (and why NOT 3.14), and the
   first-boot bootstrap behavior. Repository-layout list now names
   requirements.txt and pyproject.toml roles.
-* docs/decisions.md — ADR #10 "Deploying to Streamlit Community Cloud uses
+* docs/decisions.md - ADR #10 "Deploying to Streamlit Community Cloud uses
   requirements.txt, not Poetry" recording context, decision, consequences.
-* pyproject.toml — deliberately UNCHANGED. No [tool.poetry] exists, so
+* pyproject.toml - deliberately UNCHANGED. No [tool.poetry] exists, so
   `package-mode = false` would be dead config; and no artificial Python
   package was created (both satisfy acceptance criteria).
 
@@ -68,7 +68,7 @@ Python runtime pinning (Community Cloud)
 Verification (all real executions in a clean Python 3.12.3 virtualenv
 created from /usr/bin python3.12 snap; installed exactly requirements.txt)
 -------------------------------------------------------------------------
-1. `pip install -r requirements.txt` on Python 3.12.3: SUCCESS — all packages
+1. `pip install -r requirements.txt` on Python 3.12.3: SUCCESS - all packages
    installed from wheels, no source compilation (dbt-core-experimental-parser
    built once from its sdist as expected).
 2. Full pytest suite in that clean env: 49 passed, 12 warnings (same 12
@@ -122,5 +122,5 @@ Notes
 * The operator still needs to (a) choose "main"/this branch + entrypoint
   streamlit/app.py + Python 3.12 in Community Cloud and (b) redeploy, because
   the repo has no deploy credentials and deployment is dashboard-driven.
-* 3.12 is validated; local dev stays on 3.11/3.12 — README already says
+* 3.12 is validated; local dev stays on 3.11/3.12 - README already says
   "Python 3.11 or newer".

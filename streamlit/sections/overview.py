@@ -4,11 +4,11 @@ The first screen explains the assignment's purpose before any chart is shown:
 TrackNow records conversions with a commission, PostHog records sessions, and
 the pipeline measures how many conversions can be related to a session by an
 exact click identifier. It separates the two populations the exercise talks
-about — the production system with its REPORTED 18% unmatched gap (an
+about - the production system with its REPORTED 18% unmatched gap (an
 assignment premise, never re-derived here) and the anonymised sample this app
-executes on — then shows the real architecture — Excel sample, Polars
+executes on - then shows the real architecture - Excel sample, Polars
 ingestion, DuckDB raw, dbt staging / intermediate / marts, and this read-only
-Streamlit app — with a one-line responsibility per layer, confirms the app is
+Streamlit app - with a one-line responsibility per layer, confirms the app is
 connected read-only to the published marts, and points to the deeper pages.
 
 All numbers and relations shown come from dbt-published relations: the
@@ -104,7 +104,7 @@ ARCHITECTURE_LAYERS = (
 
 
 def render() -> None:
-    st.title("PFM conversion attribution — walkthrough")
+    st.title("PFM conversion attribution - walkthrough")
     st.write(
         "**The problem.** TrackNow records every conversion (an order) with a "
         "commission in GBP. PostHog records browsing sessions, some of which "
@@ -119,10 +119,10 @@ def render() -> None:
         "layers, how conversions match to sessions, why unmatched rows "
         "occur in this sample, and the impact on channel reporting. "
         "The walkthrough is organized into the two assignment areas:\n\n"
-        "- **Area 1 — Attribution & data modeling**: sample architecture (Overview), "
+        "- **Area 1 - Attribution & data modeling**: sample architecture (Overview), "
         "observed findings on the extract (Attribution analysis), and deterministic "
         "rules, production identity design, and limitations (Methodology and limitations).\n"
-        "- **Area 2 — Investigation, integration & monitoring**: diagnosing the reported "
+        "- **Area 2 - Investigation, integration & monitoring**: diagnosing the reported "
         "18% production gap (Investigation & monitoring), production data quality "
         "checks and alerting (Data quality monitoring), QuickBooks to BigQuery "
         "reconciliation design (QuickBooks reconciliation), and the engineering roadmap "
@@ -158,7 +158,7 @@ def render() -> None:
     decided_total = int(health_row[0])
     matched_total = int(health_row[1])
     sample_match_display = (
-        f"{matched_total / decided_total:.0%}" if decided_total else "—"
+        f"{matched_total / decided_total:.0%}" if decided_total else "-"
     )
 
     st.subheader("What this executable sample demonstrates")
@@ -168,7 +168,7 @@ def render() -> None:
         "attribution pipeline can be modelled, executed, and inspected end "
         "to end. The provided anonymised sample does not contain deterministic "
         "cross-system identifier overlap, so the local exact-match model attributes "
-        "none of the sample's conversions — a factual property of this file, "
+        "none of the sample's conversions - a factual property of this file, "
         "not a measurement of production and not a contradiction of the reported 18%."
     )
     st.info(
@@ -187,7 +187,7 @@ def render() -> None:
         "(read-only)."
     )
     for layer, responsibility in ARCHITECTURE_LAYERS:
-        st.markdown(f"- **{layer}** — {responsibility}")
+        st.markdown(f"- **{layer}** - {responsibility}")
     st.write(
         "All attribution rules run inside dbt using exact click-identifier "
         "matching (gclid, fbclid, and URL click IDs). The Streamlit app acts "

@@ -1,7 +1,7 @@
 [project]
 name = "pfm-assignment"
 version = "0.1.0"
-description = "PFM assignment — data ingestion, warehouse, attribution"
+description = "PFM assignment - data ingestion, warehouse, attribution"
 requires-python = ">=3.11"
 dependencies = [
     "polars>=1.0",

@@ -1,4 +1,4 @@
-Evidence — Card 2 (t_446cfc9b) — Data analysis and visualizations
+Evidence - Card 2 (t_446cfc9b) - Data analysis and visualizations
 Branch: wt/t_446cfc9b  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main ed5f540 (Card 1 merged via PR #17)
 Commits:
@@ -10,7 +10,7 @@ Commits:
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
-* streamlit/sections/analysis.py  — full Card-2 analysis page, four sections,
+* streamlit/sections/analysis.py  - full Card-2 analysis page, four sections,
   all numbers read from dbt relations:
     - Attribution overview: valid conversions, commission, matched /
       unmatched / ambiguous, match rate and unmatched rate over the
@@ -44,7 +44,7 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
   re-implemented in Python. Every value is an aggregate over a dbt relation.
   The only non-mart read is intermediate.int_unmatched_conversions, consumed
   for its pre-computed unmatched_reason column only (ADR #8).
-* tests/test_streamlit_analysis.py  — 7 hermetic unit tests over a synthetic
+* tests/test_streamlit_analysis.py  - 7 hermetic unit tests over a synthetic
   DuckDB shaped like the real marts: overview metrics are pure aggregates,
   zero-fill of the full reason vocabulary, percentage reconciliation to 100%,
   EMPTY-RELATION behavior (all reasons 0, all percents valid 0.0), zero-fill
@@ -52,7 +52,7 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
   attributed/unattributed commission reconciliation. The synthetic fixture
   mirrors the mart surface the app reads (fct_revenue_attribution,
   mart_attribution_health, int_unmatched_conversions, daily proxy).
-* tests/test_analysis_page.py + tests/_analysis_driver.py  — 5 AppTest render
+* tests/test_analysis_page.py + tests/_analysis_driver.py  - 5 AppTest render
   checks against the REAL built worktree warehouse (PFM_DUCKDB_PATH):
   no exceptions + four section headers; KPIs reconcile to the mart totals
   (92 valid / GBP 1,001.70 / 0 matched / 92 unmatched / 0 ambiguous /
@@ -62,7 +62,7 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
   Vega-Lite bars whose x-fields are exactly conversions and commission_gbp);
   source-level guard that the consumer never reads raw/staging relations and
   that intermediate.int_conversion_attribution is not read directly.
-* README.md / docs/decisions.md  — consumer docs updated: four sections with
+* README.md / docs/decisions.md  - consumer docs updated: four sections with
   the dual source bars, audit reconciliation sourced from mart_attribution_
   health; ADR #8 states the only intermediate read is int_unmatched_conversions
   and all other totals come from marts.mart_attribution_health.
@@ -71,7 +71,7 @@ Acceptance verification (real executions)
 -----------------------------------------
 1. Warehouse built in the isolated worktree: ingestion + `dbt build`
    completed, PASS=74 WARN=0 ERROR=0 (4 table models, 64 data tests, 1 unit
-   test, 5 view models) — after the rework commit.
+   test, 5 view models) - after the rework commit.
 2. Real mart ground truth probed from the built warehouse:
    fct_revenue_attribution 92 rows; all match_status='unmatched'
    (85 active / 7 refunded; 8 denied excluded at revenue layer);
@@ -96,7 +96,7 @@ Acceptance verification (real executions)
 7. git diff --check clean; no raw/staging reads in the consumer (guard test
    + ADR #8 document the single intermediate diagnostic read).
 
-Rework round 1 (reviewer changes requested) — how each item was addressed
+Rework round 1 (reviewer changes requested) - how each item was addressed
 --------------------------------------------------------------------------
 1. Empty-population NaN: `_unmatched_reason_counts` now computes the total
    from the counts list and assigns 0.0 percent when the total is 0. New
@@ -104,8 +104,8 @@ Rework round 1 (reviewer changes requested) — how each item was addressed
    percentages` deletes the diagnostic rows and asserts complete taxonomy +
    all valid 0.0% (no NaN).
 2. Commission-by-source bar: marketing attribution now renders TWO side-by-
-   side horizontal bar charts — conversions by source (#1f77b4) and
-   commission by source (#ff7f0e) — above the audit table. New AppTest
+   side horizontal bar charts - conversions by source (#1f77b4) and
+   commission by source (#ff7f0e) - above the audit table. New AppTest
    `test_analysis_page_shows_both_source_bars` inspects the rendered
    Vega-Lite specs and asserts exactly two source bars whose x-fields are
    {"conversions", "commission_gbp"}.

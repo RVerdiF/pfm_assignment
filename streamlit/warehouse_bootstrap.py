@@ -3,12 +3,12 @@
 The app must start even when ``warehouse/pfm.duckdb`` does not exist yet (for
 example on a fresh hosting environment). This module centralizes that
 decision: when the warehouse file is missing or the required dbt relations are
-absent, it runs the canonical pipeline first —
+absent, it runs the canonical pipeline first -
 
     python ingestion/load_excel.py
     dbt build
 
-— and only then opens the warehouse read-only. Once the pipeline has run, the
+- and only then opens the warehouse read-only. Once the pipeline has run, the
 connection is cached for the rest of the Streamlit session, so the same
 execution never rebuilds the warehouse twice.
 
@@ -50,7 +50,7 @@ EXPECTED_MARTS = (
 )
 # The narrow diagnostic view the analysis and methodology pages read for the
 # unmatched-reason taxonomy (ADR 8: the only intermediate-layer read, an
-# aggregate over its pre-computed unmatched_reason column — never a join).
+# aggregate over its pre-computed unmatched_reason column - never a join).
 # It is part of the same required-relation contract as the marts so a custom
 # PFM_DUCKDB_PATH warehouse cannot pass bootstrap and then crash at render.
 EXPECTED_INTERMEDIATE_VIEWS = (
@@ -264,7 +264,7 @@ def _check_target_within_project(db_path: Path) -> None:
     ``PFM_DUCKDB_PATH`` may point at an *already provisioned* warehouse to
     read, but the app cannot auto-rebuild an arbitrary path without changing
     the pipeline configuration. Failing loudly beats silently rebuilding the
-    wrong file — and when the custom warehouse is missing required relations
+    wrong file - and when the custom warehouse is missing required relations
     the readable error names them, so a marts-only override cannot pass
     bootstrap and then crash at render time.
     """

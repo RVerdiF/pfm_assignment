@@ -1,7 +1,7 @@
 """Unit tests for the Streamlit attribution analysis page.
 
 Scope: the *data-shaping helpers* that turn dbt relations into the frames the
-page renders — not the Streamlit widgets themselves (rendering is exercised
+page renders - not the Streamlit widgets themselves (rendering is exercised
 separately with a real warehouse via AppTest). The tests build a small DuckDB
 warehouse with the same schema shape as the real dbt marts and assert that the
 helpers:
@@ -136,7 +136,7 @@ def test_unmatched_reason_counts_empty_relation_returns_zero_percentages(
     """An all-matched warehouse has an empty int_unmatched_conversions view.
 
     The diagnosis must still render a complete taxonomy with valid 0.0%
-    percentages — never NaN from a 0/0 division and never a silently dropped
+    percentages - never NaN from a 0/0 division and never a silently dropped
     reason vocabulary.
     """
     connection.execute("delete from intermediate.int_unmatched_conversions")

@@ -115,7 +115,7 @@ def _render_overview(connection) -> None:
     metrics = _overview_metrics(connection)
 
     # What the evaluator should take away from the cards above: the sample is
-    # 100% unattributed under exact matching — a property of the anonymised
+    # 100% unattributed under exact matching - a property of the anonymised
     # sample, never a production measurement (ADR 11).
     if metrics["conversions"] and metrics["matched"] == 0:
         st.write(
@@ -142,11 +142,11 @@ def _render_overview(connection) -> None:
     unmatched_rate = metrics["unmatched_rate"]
     rate_columns[0].metric(
         "Match rate",
-        f"{match_rate:.1%}" if match_rate is not None else "—",
+        f"{match_rate:.1%}" if match_rate is not None else "-",
     )
     rate_columns[1].metric(
         "Unmatched rate",
-        f"{unmatched_rate:.1%}" if unmatched_rate is not None else "—",
+        f"{unmatched_rate:.1%}" if unmatched_rate is not None else "-",
     )
 
     # Reconciliation strip: the revenue-valid population (92) is a subset of
@@ -156,7 +156,7 @@ def _render_overview(connection) -> None:
     # explicit and lets an evaluator reconcile the overview numbers with the
     # diagnosis tables. The decided total comes from the health mart
     # (marts.mart_attribution_health), which publishes the full decided
-    # population — including denied rows — without reading the intermediate
+    # population - including denied rows - without reading the intermediate
     # attribution table directly (ADR 8 keeps intermediate reads limited to
     # the pre-computed unmatched_reason diagnostic view).
     decided = int(
@@ -180,18 +180,18 @@ def _render_overview(connection) -> None:
     )
     audit_columns[2].caption(
         f"Valid {metrics['conversions']:,} + denied {denied:,} = decided "
-        f"{decided:,} — reconciled from the health mart."
+        f"{decided:,} - reconciled from the health mart."
     )
 
     with st.expander("Detailed mart rows (audit)"):
         st.caption(
-            "Raw rows from marts.fct_revenue_attribution — read-only view of "
+            "Raw rows from marts.fct_revenue_attribution - read-only view of "
             "the exact relation behind every number on this page."
         )
         revenue = read_relation(connection, "fct_revenue_attribution")
         st.dataframe(revenue, width="stretch", hide_index=True)
         health = read_relation(connection, "mart_attribution_health")
-        st.caption("marts.mart_attribution_health — daily/source health.")
+        st.caption("marts.mart_attribution_health - daily/source health.")
         st.dataframe(health, width="stretch", hide_index=True)
 
 
@@ -466,7 +466,7 @@ def _render_commission(connection) -> None:
         )
 
     st.caption(
-        "Daily commission trend (marts.fct_commission_daily_local) — "
+        "Daily commission trend (marts.fct_commission_daily_local) - "
         "local proxy view."
     )
     proxy = connection.execute(

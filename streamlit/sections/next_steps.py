@@ -3,7 +3,7 @@
 The final page of the walkthrough. Every earlier page describes what this
 assignment actually builds; this page closes the story by outlining, in a few
 short architecture-oriented paragraphs, how the same solution could evolve to
-a production GCP pipeline — without implementing any of it here.
+a production GCP pipeline - without implementing any of it here.
 
 The page is deliberately pure prose: it reads no warehouse relation and adds
 no chart, because there is nothing in the delivered repo to measure yet. Its
@@ -123,10 +123,10 @@ def render() -> None:
 
     st.subheader("What changes")
     for title, body in WHAT_CHANGES:
-        st.markdown(f"- **{title}** — {body}")
+        st.markdown(f"- **{title}** - {body}")
 
     st.subheader("What stays the same")
     for title, body in WHAT_STAYS:
-        st.markdown(f"- **{title}** — {body}")
+        st.markdown(f"- **{title}** - {body}")
 
     st.caption(NOT_IMPLEMENTED_NOTE)

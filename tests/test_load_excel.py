@@ -56,7 +56,7 @@ def test_sheet_to_table_maps_target_sheets():
 
 def _write_fixture_xlsx(path):
     """Create sheets with real records and a fully null row IN THE MIDDLE of
-    the extent (absolute row 4 with no cells) — represents a record present in
+    the extent (absolute row 4 with no cells) - represents a record present in
     the spreadsheet that ingestion must preserve, not a footer outside the data area."""
     wb = openpyxl.Workbook()
     ws1 = wb.active
@@ -149,7 +149,7 @@ def test_load_applies_snake_case_to_columns(fixture_xlsx, duckdb_path):
 
 def test_load_preserves_identifier_values(fixture_xlsx, duckdb_path):
     """Real identifiers are preserved; the fully null row is NOT interpreted
-    as the end of the table — records following it exist."""
+    as the end of the table - records following it exist."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:
@@ -167,7 +167,7 @@ def test_load_preserves_identifier_values(fixture_xlsx, duckdb_path):
 
 def test_load_retains_fully_null_interior_rows(fixture_xlsx, duckdb_path):
     """A fully null row within the spreadsheet extent is a record and cannot
-    be filtered out — no data filters are applied during ingestion."""
+    be filtered out - no data filters are applied during ingestion."""
     le.load_excel_into_duckdb(fixture_xlsx, duckdb_path)
     con = duckdb.connect(duckdb_path)
     try:

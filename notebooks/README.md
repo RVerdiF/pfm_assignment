@@ -73,7 +73,7 @@ The EDA hypotheses became explicit pipeline decisions:
 - Fan-out is resolved deterministically: typed identifiers outrank
   `click_id_from_url`, then the most recent eligible session wins; ties are
   flagged `ambiguous`.
-- Unmatched conversions are not dropped — they are explained by
+- Unmatched conversions are not dropped - they are explained by
   `int_unmatched_conversions` with a deterministic `unmatched_reason`
   (`missing_click_id`, `outside_posthog_sample_window`,
   `multiple_candidates`, `click_id_not_found`, `unknown`).

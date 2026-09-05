@@ -80,7 +80,7 @@ What it does:
 2. creates/replaces `raw.tracknow_checkouts` and `raw.posthog_sessions` in
    `warehouse/pfm.duckdb`;
 3. prints the created table names;
-4. runs `validate` — a reconciliation that compares row counts, column counts,
+4. runs `validate` - a reconciliation that compares row counts, column counts,
    and snake_case-normalized column names between the Excel sheets and the
    DuckDB tables;
 5. exits non-zero when reconciliation fails (`Reconciliation failed: Excel and

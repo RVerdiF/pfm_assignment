@@ -8,7 +8,7 @@ models:
       the identifiers that could link a conversion to a PostHog session plus
       explicit presence flags. Sample-scope note: no identifier is treated as
       a join key here, and affiliate_session_id is never assumed to equal a
-      PostHog session_id — the sample provides no documented bridge proving
+      PostHog session_id - the sample provides no documented bridge proving
       one. In production, affiliate_session_id is part of the TrackNow
       identity contract (see docs/decisions.md ADR 3), not an ignorable field.
     columns:
@@ -74,7 +74,7 @@ models:
       equality between its click_id and a PostHog click identifier value
       (gclid, fbclid, or click_id_from_url) from
       int_posthog_attribution_candidates, because no documented cross-system
-      bridge is available in the delivered data — this is a constraint of the
+      bridge is available in the delivered data - this is a constraint of the
       anonymised sample, not the production attribution design (ADR 3 / ADR 11).
       Eligibility window: session_date <= conversion_date (TrackNow exposes
       only a date, so no conversion time is invented). Typed identifiers
