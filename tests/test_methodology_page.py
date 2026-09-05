@@ -196,12 +196,55 @@ def test_methodology_page_renders_with_real_warehouse() -> None:
     assert not at.exception, at.exception
     headers = {h.value for h in at.subheader}
     assert "Production attribution design" in headers
+    assert "dbt transformation architecture" in headers
     assert "Sample implementation" in headers
     assert "Interpreting the observed results" in headers
     assert "Limitations" in headers
     assert "Recommendations" in headers
     # The investigation section moved to the Area 2 Investigation & monitoring page.
     assert not any("investigate" in h.lower() for h in headers)
+
+
+def test_methodology_page_renders_dbt_architecture_table() -> None:
+    """The dbt architecture table must explicitly document model, layer, grain, and key transformations."""
+    at = _render()
+    assert not at.exception, at.exception
+    tables = at.get("table")
+    assert len(tables) >= 1, "Expected dbt architecture table to be rendered via st.table"
+    table = tables[0].value
+
+    # Validate table columns
+    assert list(table.columns) == ["Model", "Layer", "Grain", "Key Transformations"]
+
+    # Verify expected models across Staging, Intermediate, and Marts layers
+    models = list(table["Model"])
+    expected_models = [
+        "stg_tracknow_checkouts",
+        "stg_posthog_sessions",
+        "stg_commission_daily",
+        "int_tracknow_attribution_candidates",
+        "int_posthog_attribution_candidates",
+        "int_conversion_attribution",
+        "int_unmatched_conversions",
+        "int_tracknow_commission_reconciliation",
+        "fct_revenue_attribution",
+        "mart_attribution_health",
+        "fct_commission_daily_local",
+        "analytics_core.f_commission_daily",
+    ]
+    for expected in expected_models:
+        assert expected in models, f"Model {expected} missing from dbt architecture table"
+
+    # Verify grain and transformation details are non-empty
+    for _, row in table.iterrows():
+        assert row["Grain"].strip(), f"Grain for {row['Model']} must not be empty"
+        assert row["Key Transformations"].strip(), f"Key Transformations for {row['Model']} must not be empty"
+
+    # Verify Google Sheet commission pipeline is fully represented across layers
+    layers = dict(zip(table["Model"], table["Layer"]))
+    assert "Staging" in layers["stg_commission_daily"]
+    assert "Intermediate" in layers["int_tracknow_commission_reconciliation"]
+    assert "Marts" in layers["analytics_core.f_commission_daily"]
 
 
 def test_methodology_page_explains_the_method() -> None:
