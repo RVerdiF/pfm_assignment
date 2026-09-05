@@ -43,7 +43,7 @@ CHECKS = (
     (
         "Check 2 — Duplicate / invalid TrackNow conversions",
         "The grain of the conversion table: one row per conversion, "
-        "identifiers present, statuses within the known set.",
+        "primary conversion identifier present, statuses within the known set.",
         "Duplicate tracknow_order_id count; null conversion IDs; statuses "
         "outside the accepted set.",
         "Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert.",
@@ -64,8 +64,8 @@ CHECKS = (
         "above the trailing 7-day baseline. The reported ~18% production gap "
         "is an observation, not a hardcoded SLA — the baseline comes from "
         "recent history and thresholds are configuration.",
-        "P2 — escalates to P1 only if attribution nearly stops working or a "
-        "critical report goes dark.",
+        "P2 — escalates to P1 if the unmatched rate exceeds 40% (hard ceiling) "
+        "or a critical report goes dark.",
         "Scheduled query over mart_attribution_health in production, broken "
         "down by total, channel, firm, and device/browser where available.",
         "Compare against the baseline, check whether one channel or "
@@ -74,25 +74,24 @@ CHECKS = (
     ),
     (
         "Check 4 — Commission reconciliation variance",
-        "The official commission source and the TrackNow-derived commission "
-        "agree within materiality.",
+        "QuickBooks invoices and TrackNow-derived commission agree within "
+        "materiality.",
         "absolute_delta and pct_delta per firm_id and reconciliation period, "
-        "from the reconciliation model of the QuickBooks design.",
+        "from int_quickbooks_tracknow_reconciliation.",
         "P1: absolute delta > £500. P2: pct delta > 5% and absolute delta > "
-        "£50. P3: small but recurring deltas (example thresholds, "
-        "configurable).",
+        "£50. P3: same sign delta for 3+ consecutive periods (regardless of "
+        "materiality).",
         "P1/P2/P3 — by materiality.",
-        "Monitoring query over the reconciliation output produced by the "
-        "docs/quickbooks_reconciliation_design.md pipeline.",
+        "Monitoring query over int_quickbooks_tracknow_reconciliation "
+        "(output of the reconciliation design).",
         "The alert carries firm, period, both values, and both deltas with a "
         "link to the reconciliation query; Finance is notified for P1/P2.",
     ),
     (
         "Check 5 — Firm / accounting mapping coverage",
-        "Every accounting record maps to a firm_id via the "
+        "Every QuickBooks invoice/customer resolves to a firm_id via the "
         "dim_firm_accounting_mapping bridge.",
-        "unmapped_records / total_records over the mapping and the "
-        "reconciliation output.",
+        "unmapped_invoices / total_invoices from the reconciliation output.",
         "Any new unmapped invoice → P2. More than 1% of the population "
         "unmapped → P1 if reconciliation is blocked.",
         "P2 — by default; P1 only when reconciliation cannot close.",
