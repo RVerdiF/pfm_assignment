@@ -52,7 +52,7 @@ Slack / PagerDuty / email
 | Layer | Relation | Grain | Materialization |
 | --- | --- | --- | --- |
 | Raw (Airbyte) | `raw_quickbooks.invoices` | One row per raw invoice record/version as delivered by Airbyte | BigQuery table owned by Airbyte |
-| Mapping | `dim_firm_accounting_mapping` | One row per `firm_id` | dbt seed (curated) |
+| Mapping | `dim_firm_accounting_mapping` | One row per (`firm_id`, `valid_from`) — SCD-style temporal versions | dbt seed (curated) |
 | Staging | `stg_quickbooks_invoices` | One row per current invoice | View |
 | TrackNow | `fct_commission_daily` | One row per (`commission_date`, `firm_id`) | Table |
 | Intermediate | `int_quickbooks_tracknow_reconciliation` | One row per (`invoice_id`, `firm_id`) with `period_start`/`period_end` | Table |
@@ -107,12 +107,16 @@ The core of the design: getting from a QuickBooks customer to a PFM
 
 - **Grain:** one row per (`firm_id`, `valid_from`) — SCD-style temporal versions, so a firm can be remapped over time without losing history.
 - **Fields:** `firm_id`, `firm_name`, `quickbooks_customer_id`, optional
-  `quickbooks_customer_name`, optional `valid_from` / `valid_to` if mappings
-  can change over time.
+  `quickbooks_customer_name`, `valid_from`, optional `valid_to` (open-ended
+  when `valid_to` is null — the mapping is current until a newer row supersedes
+  it).
 - **Implementation:** a dbt seed — a small, manually curated CSV reviewed by
   Finance — because the mapping is a business fact no source system owns.
-  Enforced tests: `unique` on `quickbooks_customer_id` (a customer maps to at
-  most one firm) and `unique`/`not_null` on `firm_id`.
+  Enforced tests: `unique` on (`firm_id`, `valid_from`) (a firm can be
+  remapped over time, but not twice from the same date), `not_null` on
+  `firm_id`, `quickbooks_customer_id`, and `valid_from`, and a non-overlap
+  dbt expectation that no two rows for the same `firm_id` have overlapping
+  `[valid_from, valid_to)` ranges.
 
 ### 5.2 `stg_quickbooks_invoices`
 
