@@ -39,7 +39,7 @@ how on-call is notified.
 |---|---|
 | **What it validates** | The grain of the conversion table: one row per conversion, primary conversion identifier present, statuses within the known set. |
 | **Metric** | Count of duplicate `tracknow_order_id`; count of null conversion IDs; count of statuses outside the accepted set. |
-| **Threshold** | Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert. |
+| **Threshold** | Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert. Any invalid status > 0 → alert. |
 | **Severity** | **P1** — duplicates can double-count revenue and commission, and silently overstate both. |
 | **Implementation** | dbt tests: `unique` and `not_null` on `tracknow_order_id`, `accepted_values` on status, plus a singular test asserting the business grain. |
 | **On-call action** | The mart publication is blocked or the run is marked failed; on-call decides whether to quarantine the batch and re-run ingestion. |
@@ -60,7 +60,7 @@ how on-call is notified.
 | | |
 |---|---|
 | **What it validates** | QuickBooks invoices and TrackNow-derived commission agree within materiality. |
-| **Metric** | `absolute_delta` and `pct_delta` per `firm_id` and reconciliation period (day), from `int_quickbooks_tracknow_reconciliation`. |
+| **Metric** | `absolute_delta` and `pct_delta` per `firm_id` and reconciliation period, from `int_quickbooks_tracknow_reconciliation`. |
 | **Threshold (example, configurable)** | **P1**: absolute delta > £500. **P2**: pct delta > 5% **and** absolute delta > £50. **P3**: same sign delta for 3+ consecutive periods (regardless of materiality). |
 | **Severity** | **P1/P2/P3** by materiality, as above. |
 | **Implementation** | Monitoring query over `int_quickbooks_tracknow_reconciliation` (output of the reconciliation design in `docs/quickbooks_reconciliation_design.md`). |
