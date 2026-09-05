@@ -12,13 +12,12 @@ from __future__ import annotations
 import streamlit as st
 
 DESIGN_INTRO = (
-    "The commission pipeline needs a small, explicit set of data quality "
-    "checks. Five checks cover it: source freshness, conversion grain, "
+    "Production financial pipelines require explicit data quality boundaries. "
+    "Five checks cover this commission architecture: source freshness, conversion grain, "
     "attribution quality, reconciliation variance, and accounting mapping "
-    "coverage. Each check names what it validates, its threshold, its "
-    "P1/P2/P3 severity, and how on-call is notified. This is a design "
-    "answer to Area 2 of the assignment — nothing on this page is "
-    "implemented in this repository."
+    "coverage. Each check specifies what it validates, warning thresholds, "
+    "P1/P2/P3 severity, and on-call response procedures. This is a design "
+    "reference for production — nothing on this page is implemented in this repository."
 )
 
 # One entry per check: (name, what it validates, metric, threshold, severity,
@@ -167,13 +166,12 @@ Slack / paging
 """
 
 ARCHITECTURE_NOTE = (
-    "Implementation options, in the order I would reach for them: dbt tests "
-    "and dbt source freshness (run inside the existing dbt job), scheduled "
-    "queries or a dedicated monitoring model evaluated by the scheduler "
-    "(Cloud Run job / dbt Cloud job), and the platform's alerting surface "
-    "(Cloud Monitoring or an observability platform of choice). The local "
-    "repository already exercises the equivalent contract with dbt tests "
-    "and the mart_attribution_health mart."
+    "I would implement these stages in order of operational simplicity: "
+    "start with native dbt tests and source freshness inside the transformation "
+    "job, use scheduled queries or a dedicated monitoring model in Cloud Run / dbt "
+    "Cloud for reconciliation, and wire alerts to Cloud Monitoring and Slack. "
+    "The local repository exercises this exact pattern with dbt tests and "
+    "the mart_attribution_health mart."
 )
 
 NOT_IMPLEMENTED_NOTE = (

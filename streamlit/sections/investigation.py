@@ -14,13 +14,11 @@ from __future__ import annotations
 import streamlit as st
 
 PAGE_INTRO = (
-    "This page is Area 2's investigation narrative: what the reported 18% "
-    "production gap is, how it would be investigated against production, and "
-    "how the pipeline that closes it would be monitored. The real production "
-    "tables were not delivered, so nothing below is executed here — these "
-    "are the queries and hypotheses that would run against production. The "
-    "provided anonymised sample cannot confirm or refute any of them. The "
-    "attribution method and sample interpretation remain on the Area 1 "
+    "An investigation plan for the reported 18% production gap. "
+    "Because real production tables were not delivered with this assignment, "
+    "the diagnostic queries and hypotheses below reflect the investigation I would "
+    "run in BigQuery. The provided anonymised sample cannot confirm or refute "
+    "any of them. The attribution logic and sample findings remain on the Area 1 "
     "Methodology page."
 )
 
@@ -31,30 +29,29 @@ PAGE_INTRO = (
 AREA_MAP = (
     (
         "Reported 18% gap",
-        "below — the assignment premise and what it claims",
+        "the problem baseline and assignment premise (below)",
     ),
     (
         "Investigation queries",
-        "below — six pseudo-BigQuery diagnostics, in the order I would trust them",
+        "six diagnostic BigQuery queries to isolate where tracking breaks (below)",
     ),
     (
         "Hypotheses and fixes",
-        "below — six hypotheses, each with a test and a fix",
+        "six concrete failure modes with test and remediation steps (below)",
     ),
     (
         "QuickBooks reconciliation design",
-        "the QuickBooks reconciliation page of this area "
+        "daily accounting reconciliation pipeline "
         "(docs/quickbooks_reconciliation_design.md)",
     ),
     (
         "Five monitoring checks",
-        "the Data quality monitoring page of this area "
+        "data quality thresholds across freshness, grain, and variance "
         "(docs/commission_monitoring_design.md)",
     ),
     (
         "Alerting / on-call",
-        "the Data quality monitoring page of this area — severity routing "
-        "and the alert payload",
+        "severity routing (P1/P2/P3) and incident response procedures",
     ),
 )
 
@@ -344,9 +341,10 @@ def render() -> None:
 
     st.subheader("What this area covers")
     st.write(
-        "The assignment's Area 2 asks for six elements. The first three are "
-        "the investigation narrative on this page; the last three are the "
-        "designs on the area's companion pages."
+        "Area 2 structures the investigation, integration, and monitoring into "
+        "six components: the diagnostic queries and root-cause hypotheses on this "
+        "page, followed by monitoring, reconciliation, and evolution designs on "
+        "the companion pages."
     )
     for element, where in AREA_MAP:
         st.markdown(f"- **{element}** — {where}")
@@ -355,16 +353,15 @@ def render() -> None:
     st.write(
         "**Reported production issue (assignment premise):** 18% of TrackNow "
         "conversions in the last 30 days have no matching PostHog session. "
-        "That figure is an input premise of this exercise — it describes the "
-        "production tracking stack, not the delivered file — and it is never "
+        "That figure is an input premise of this exercise describing the "
+        "production tracking stack, not the delivered file, and is never "
         "re-derived from the sample."
     )
     st.caption(
-        "Each sketch is pseudo-BigQuery SQL over the documented production "
-        "contract (TrackNow conversions, PostHog sessions, and the attribution "
-        "bridge): no column is invented — every field either exists in the "
-        "documented staging schema or is explicitly named as a hypothetical "
-        "bridge column with its role stated."
+        "Queries use BigQuery SQL over documented production contracts "
+        "(TrackNow conversions, PostHog sessions, and the attribution bridge). "
+        "Any hypothetical fields beyond current schemas (like bridge keys or timestamps) "
+        "are explicitly noted."
     )
 
     st.markdown("##### Investigation queries")
@@ -381,18 +378,16 @@ def render() -> None:
     st.markdown("##### Root-cause recommendation")
     st.write(ROOT_CAUSE_STATEMENT)
     st.write(
-        "The fix is applied depending on which test wins: identifier "
-        "persistence and propagation (Hypothesis 1), first-party attribution "
-        "state with a defined window (Hypothesis 2), identity stitching on a "
-        "login/account identifier (Hypothesis 3), redirect repair plus "
-        "automated tracking QA (Hypothesis 4), server-side or first-party "
-        "capture of the critical identifiers (Hypothesis 5), or late-arriving "
-        "data handling with incremental lookback reprocessing (Hypothesis 6)."
+        "Remediation depends on which test confirms the root cause: fixing "
+        "persistence and propagation across redirects (Hypothesis 1), introducing "
+        "first-party attribution state (Hypothesis 2), stitching user identities on "
+        "login (Hypothesis 3), repairing affiliate redirect parameters with automated "
+        "QA (Hypothesis 4), capturing critical identifiers server-side (Hypothesis 5), "
+        "or adding incremental lookback reprocessing for late-arriving sessions (Hypothesis 6)."
     )
     st.caption(
-        "Nothing on this page is executed: the production tables, the "
-        "attribution bridge, and the monitoring stack it describes are not "
-        "implemented in this repository. The executable pipeline remains the "
-        "local DuckDB sample; the monitoring and reconciliation designs live "
-        "on the area's companion pages."
+        "This page is a design reference and does not query the warehouse: the "
+        "production tables and attribution bridge described here were not delivered "
+        "and are not implemented in this repository. Executable logic is confined to the "
+        "local DuckDB sample."
     )
