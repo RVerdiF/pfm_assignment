@@ -5,8 +5,8 @@ in this repository: there is no Airbyte connection, no BigQuery deployment, no
 dbt Cloud job, and no alerting infrastructure. This is the monitoring answer to
 **Area 2 (Investigation, Integration & Monitoring)** of the assignment,
 complementing `docs/quickbooks_reconciliation_design.md` (the integration and
-reconciliation design) and the investigation plan on the Streamlit Methodology
-page.
+reconciliation design) and the investigation narrative on the Streamlit
+"Investigation & monitoring" page of the same area.
 
 The design assumes the production stack described in the README: the official
 commission source lands in BigQuery raw (via the commission integration), dbt

@@ -201,5 +201,10 @@ def test_monitoring_design_doc_exists_with_card_elements_and_readme_link() -> No
         "Immediately after freshness",
     ]:
         assert element in doc
+    # The doc's cross-reference to the investigation narrative names the page
+    # that actually carries it (Area 2 Investigation & monitoring), never the
+    # pre-relocation Methodology page.
+    assert 'Investigation & monitoring' in doc
+    assert "Methodology" not in doc
     readme = README.read_text()
     assert "docs/commission_monitoring_design.md" in readme
