@@ -5,8 +5,9 @@ contract specified in the assignment without executing against BigQuery:
 - References authoritative analytics_core.f_commission_daily (not local proxy)
 - Employs a 7-day trailing calendar window excluding current day
 - Uses SAFE_DIVIDE for zero-baseline safety
-- Applies the 40% anomaly threshold (0.40)
-- Filters to return anomalies only
+- Classifies rows with CASE as 'anomaly' vs 'normal' based on 40% threshold
+- Evaluates strictly 30 days and scans at least 37 days from origin
+- Filters to return anomalies only (WHERE anomaly = 'anomaly')
 - Orders by absolute revenue impact descending
 """
 from __future__ import annotations
@@ -42,8 +43,9 @@ def test_trailing_calendar_window_excludes_current_day() -> None:
 
 def test_source_scans_at_least_37_days_and_scores_30_days() -> None:
     sql = _sql().lower()
-    assert "37 day" in sql
-    assert "30 day" in sql
+    # 36 day lookback = 37 discrete calendar dates; 29 day lookback = 30 discrete dates
+    assert "36 day" in sql or "37 day" in sql
+    assert "29 day" in sql or "30 day" in sql
 
 
 def test_safe_divide_protects_zero_baseline() -> None:
@@ -56,9 +58,15 @@ def test_forty_percent_threshold_applied() -> None:
     assert "0.40" in sql
 
 
+def test_classifies_anomaly_and_normal() -> None:
+    sql = _sql().lower()
+    assert "'anomaly'" in sql
+    assert "'normal'" in sql
+
+
 def test_filters_anomalies_only() -> None:
     sql = _sql().lower()
-    assert "where anomaly" in sql or "> 0.40" in sql
+    assert "where anomaly = 'anomaly'" in sql
 
 
 def test_orders_by_absolute_revenue_impact() -> None:

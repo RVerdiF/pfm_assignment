@@ -502,7 +502,7 @@ def _render_commission(connection) -> None:
         st.markdown(
             "- **Source**: `analytics_core.f_commission_daily` (production contract: `commission_date`, `firm_id`, `commission_amount`).\n"
             "- **Trailing 7-day baseline**: calendar-day window (`RANGE BETWEEN 7 PRECEDING AND 1 PRECEDING` via `UNIX_DATE(commission_date)`), strictly excluding current day.\n"
-            "- **Anomaly threshold**: flags absolute swings `|pct_change_vs_7d_avg| > 40%`.\n"
+            "- **Anomaly threshold**: flags absolute swings `|pct_change_vs_7d_avg| > 40%` (`'anomaly'` vs `'normal'`).\n"
             "- **Edge cases**: `SAFE_DIVIDE` avoids zero-division on zero/missing baselines; sorted by `absolute_revenue_impact DESC`."
         )
         st.code(_read_sql_asset("commission_anomalies.sql"), language="sql")
