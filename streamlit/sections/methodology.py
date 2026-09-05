@@ -175,10 +175,10 @@ PRODUCTION_IDENTIFIER_ROLES = (
         "references rather than discard it.",
     ),
     (
-        "`utm_content`",
-        "Not used as a conversion→session key. After the session is "
+        "`utm_content` / `ad_id`",
+        "Not used as a conversion-to-session key. After the session is "
         "identified, it enriches attribution with Meta ad/creative data "
-        "(e.g. ad_id) for reporting.",
+        "(exposing `ad_id` from `utm_content` per the source workbook) for reporting.",
     ),
 )
 
@@ -498,7 +498,7 @@ def _production_design_section() -> None:
         "`PostHog.session_id`. Its exact relationship must be explicitly "
         "documented by the integration team rather than assumed in SQL. "
         "Finally, `utm_content` is preserved for ad-level creative reporting "
-        "(like ad_id), never as a join key between tables."
+        "(exposed as `ad_id` in `marts.fct_revenue_attribution`), never as a join key between tables."
     )
     st.markdown("##### Edge cases and data-model handling")
     st.write(

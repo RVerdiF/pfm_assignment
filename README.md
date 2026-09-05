@@ -276,7 +276,7 @@ The pages in Area 1 read directly from the published marts and one diagnostic in
 - **Methodology and limitations**: documents the target production identity flow (`gclid`/`fbclid`, `affiliate_session_id`), the sample's deterministic matching rules, dynamic metrics read live from the warehouse, and concrete data limitations.
 
 Published relations consumed:
-- `marts.fct_revenue_attribution`: valid conversions, commission, and channel attribution.
+- `marts.fct_revenue_attribution`: valid conversions with explicit assignment reporting dimensions (`channel` <- `utm_source`, `campaign` <- `utm_campaign`, `ad_id` <- `utm_content`, `matched_session_id`, `firm_id`, `commission_gbp`).
 - `marts.mart_attribution_health`: daily attribution health and population reconciliation.
 - `marts.fct_commission_daily_local`: local daily commission proxy.
 - `intermediate.int_unmatched_conversions`: pre-computed non-match reason breakdown (read-only diagnostic view).
