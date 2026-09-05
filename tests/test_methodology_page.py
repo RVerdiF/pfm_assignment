@@ -485,21 +485,22 @@ def _build_synthetic_warehouse(path: Path, *, include_diagnostic_view: bool = Tr
             "conversion_id varchar, conversion_date date, firm_id varchar, "
             "status varchar, commission_gbp double, match_status varchar, "
             "matched_session_id varchar, matched_distinct_id varchar, "
-            "match_method varchar, utm_source varchar, utm_medium varchar, "
+            "match_method varchar, channel varchar, campaign varchar, "
+            "ad_id varchar, utm_source varchar, utm_medium varchar, "
             "utm_campaign varchar, utm_content varchar)"
         )
         con.execute(
             "insert into marts.fct_revenue_attribution values "
-            "('m1', date '2026-06-01', 'f1', 'active', 50.0, 'matched', 's1', 'd1', 'gclid_exact', 'google', 'cpc', 'camp1', NULL), "
-            "('m2', date '2026-06-01', 'f1', 'active', 40.0, 'matched', 's2', 'd2', 'fbclid_exact', 'facebook', 'cpc', 'camp2', NULL), "
-            "('m3', date '2026-06-01', 'f2', 'active', 25.0, 'matched', 's3', 'd3', 'gclid_exact', 'google', 'cpc', 'camp3', NULL), "
-            "('u1', date '2026-06-01', 'f1', 'active', 60.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
-            "('u2', date '2026-06-01', 'f2', 'active', 30.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
-            "('u3', date '2026-06-02', 'f1', 'active', 20.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
-            "('u4', date '2026-06-02', 'f2', 'active', 15.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
-            "('a1', date '2026-06-02', 'f1', 'active', 10.0, 'ambiguous', NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
-            "('a2', date '2026-06-02', 'f2', 'active', 10.0, 'ambiguous', NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
-            "('u5', date '2026-06-03', 'f1', 'active', 10.75, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
+            "('m1', date '2026-06-01', 'f1', 'active', 50.0, 'matched', 's1', 'd1', 'gclid_exact', 'google', 'camp1', NULL, 'google', 'cpc', 'camp1', NULL), "
+            "('m2', date '2026-06-01', 'f1', 'active', 40.0, 'matched', 's2', 'd2', 'fbclid_exact', 'facebook', 'camp2', NULL, 'facebook', 'cpc', 'camp2', NULL), "
+            "('m3', date '2026-06-01', 'f2', 'active', 25.0, 'matched', 's3', 'd3', 'gclid_exact', 'google', 'camp3', NULL, 'google', 'cpc', 'camp3', NULL), "
+            "('u1', date '2026-06-01', 'f1', 'active', 60.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
+            "('u2', date '2026-06-01', 'f2', 'active', 30.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
+            "('u3', date '2026-06-02', 'f1', 'active', 20.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
+            "('u4', date '2026-06-02', 'f2', 'active', 15.0, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
+            "('a1', date '2026-06-02', 'f1', 'active', 10.0, 'ambiguous', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
+            "('a2', date '2026-06-02', 'f2', 'active', 10.0, 'ambiguous', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
+            "('u5', date '2026-06-03', 'f1', 'active', 10.75, 'unmatched', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
         )
 
         con.execute(
@@ -524,3 +525,26 @@ def _build_synthetic_warehouse(path: Path, *, include_diagnostic_view: bool = Tr
             )
     finally:
         con.close()
+
+
+def test_fct_revenue_attribution_has_explicit_reporting_dimensions() -> None:
+    """Verify marts.fct_revenue_attribution exposes channel, campaign, ad_id explicitly."""
+    con = duckdb.connect(str(WAREHOUSE), read_only=True)
+    try:
+        cols = {
+            col[0]
+            for col in con.execute(
+                "select column_name from information_schema.columns "
+                "where table_schema = 'marts' and table_name = 'fct_revenue_attribution'"
+            ).fetchall()
+        }
+    finally:
+        con.close()
+
+    # The assignment explicitly requires channel, campaign, ad, session, firm, and commission.
+    assert "channel" in cols
+    assert "campaign" in cols
+    assert "ad_id" in cols
+    assert "matched_session_id" in cols
+    assert "firm_id" in cols
+    assert "commission_gbp" in cols

@@ -64,6 +64,20 @@ models:
           'url_click_exact' for matched conversions; NULL otherwise. Derived
           from the attribution identifier type, which is itself the result of
           exact click-id equality only.
+      - name: channel
+        description: >-
+          Acquiring marketing channel derived from the matched session's
+          utm_source; NULL when not matched. Directly addresses the Area 1
+          reporting contract.
+      - name: campaign
+        description: >-
+          Marketing campaign derived from the matched session's utm_campaign;
+          NULL when not matched. Directly addresses the Area 1 reporting contract.
+      - name: ad_id
+        description: >-
+          Ad identifier derived from the matched session's utm_content (which
+          carries Meta ad_id values per the source workbook); NULL when not
+          matched. Directly addresses the Area 1 reporting contract.
       - name: utm_source
         description: utm_source of the MATCHED session; NULL when not matched.
       - name: utm_medium

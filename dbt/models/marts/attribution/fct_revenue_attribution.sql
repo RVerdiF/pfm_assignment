@@ -29,7 +29,10 @@
 --   match_method        = how the exact match was made:
 --                         'gclid_exact' | 'fbclid_exact' | 'url_click_exact'
 --                         (NULL unless matched)
---   utm_*               = UTM parameters of the MATCHED session only. An
+--   channel             = acquiring marketing channel (from utm_source; NULL unless matched)
+--   campaign            = marketing campaign (from utm_campaign; NULL unless matched)
+--   ad_id               = ad identifier (from utm_content, carrying Meta ad_id where applicable; NULL unless matched)
+--   utm_*               = raw UTM parameters of the MATCHED session only. An
 --                         unmatched/ambiguous conversion has no attributed
 --                         session, therefore no UTM is invented.
 
@@ -90,6 +93,13 @@ select
             then 'url_click_exact'
         else null
     end as match_method,
+    -- Explicit marketing attribution dimensions required by the assignment
+    -- (channel, campaign, ad / ad_id, session, firm, commission per conversion):
+    ms.utm_source as channel,
+    ms.utm_campaign as campaign,
+    -- utm_content carries the ad identifier (e.g. Meta ad_id) where applicable
+    ms.utm_content as ad_id,
+    -- Raw UTM parameters preserved for technical consumers
     ms.utm_source,
     ms.utm_medium,
     ms.utm_campaign,

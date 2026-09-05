@@ -272,17 +272,17 @@ def _render_unmatched_diagnosis(connection) -> None:
 
 
 def _marketing_attribution(connection) -> pd.DataFrame:
-    """Return conversions and commission by UTM source (attributed only).
+    """Return conversions and commission by marketing channel (attributed only).
 
     Unmatched and ambiguous conversions have no attributed session, so they
-    carry no UTM (fct_revenue_attribution leaves those columns NULL). Grouping
-    on utm_source therefore never fabricates a channel: conversions with no
+    carry no UTM/channel (fct_revenue_attribution leaves channel and UTM columns NULL). Grouping
+    on channel (derived from utm_source) therefore never fabricates a channel: conversions with no
     attributed source roll into the explicit 'Unattributed' bucket.
     """
     return connection.execute(
         """
         select
-            coalesce(utm_source, 'Unattributed') as utm_source,
+            coalesce(channel, 'Unattributed') as utm_source,
             count(*) as conversions,
             round(coalesce(sum(commission_gbp), 0), 2) as commission_gbp
         from marts.fct_revenue_attribution

@@ -47,14 +47,15 @@ def connection(tmp_path: Path) -> duckdb.DuckDBPyConnection:
         """
         create table marts.fct_revenue_attribution as
         select * from (values
-            ('c1', date '2026-05-09', 'active', 10.00, 'unmatched', null,   null,           null),
-            ('c2', date '2026-05-09', 'active', 20.00, 'matched',   's1', 'gclid_exact',  'google'),
-            ('c3', date '2026-05-10', 'refunded', 5.00, 'ambiguous', null, null,           null),
-            ('c4', date '2026-05-10', 'active', 7.50, 'matched',   's2', 'fbclid_exact', 'facebook'),
-            ('c5', date '2026-05-11', 'active', 3.25, 'unmatched', null, null,           null)
+            ('c1', date '2026-05-09', 'active', 10.00, 'unmatched', null,   null,           null,       null,       null,       null),
+            ('c2', date '2026-05-09', 'active', 20.00, 'matched',   's1', 'gclid_exact',  'google',   'summer',   'ad123',    'google'),
+            ('c3', date '2026-05-10', 'refunded', 5.00, 'ambiguous', null, null,           null,       null,       null,       null),
+            ('c4', date '2026-05-10', 'active', 7.50, 'matched',   's2', 'fbclid_exact', 'facebook', 'promo',    'ad456',    'facebook'),
+            ('c5', date '2026-05-11', 'active', 3.25, 'unmatched', null, null,           null,       null,       null,       null)
         ) as t(
             conversion_id, conversion_date, status, commission_gbp,
-            match_status, matched_session_id, match_method, utm_source
+            match_status, matched_session_id, match_method, channel,
+            campaign, ad_id, utm_source
         )
         """
     )
