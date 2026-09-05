@@ -1,0 +1,141 @@
+Evidence — Card 1 (t_17f2b46c) — Narrative: attribution, identity design and the 18% investigation
+Branch: wt/t_17f2b46c  (pushed to RVerdiF/pfm_assignment)
+Base:   wt/t_e552e8c9 47fd9b3 (head of the approved Card 5 branch, per board-chain
+        precedent; my card's target files are identical on card-4-next-steps and
+        wt/t_e552e8c9 — verified with git diff before branching)
+
+What changed
+------------
+1. Overview page (streamlit/sections/overview.py)
+   - New subheader "The reported production problem": the 18% figure is cited
+     verbatim as an assignment premise ("18% of TrackNow conversions in the
+     last 30 days have no matching PostHog session") and explicitly never
+     re-derived from the sample.
+   - New subheader "What this executable sample demonstrates": the sample is
+     an anonymised, bounded extract (100 TrackNow conversions / 200 PostHog
+           sessions); the provided anonymised sample does not contain a deterministic
+           cross-system identity overlap, so the local exact-match model attributes
+           none of it — a property of the file, not a production measurement.
+   - Visual callout (st.info):
+       Reported production gap: 18%
+       Observed deterministic match rate in provided anonymised sample: 0%
+       These numbers describe different populations and should not be
+       compared as if one validates the other.
+     The sample-side rate is READ LIVE from marts.mart_attribution_health
+     (decided/matched sums) on every render, so it cannot drift from the
+     warehouse; only the 18% side is a fixed premise.
+   - require_connection() moved earlier so the callout has the warehouse.
+
+2. Analysis page (streamlit/sections/analysis.py)
+   - Diagnosis section renamed: "Why conversions are not attributed" ->
+     "What the provided sample can diagnose".
+   - Removed universal-claim narrative: "the honest result, not a missing
+     step" and "not places where a better join would help" are gone.
+   - New sample-scoped framing: the taxonomy diagnoses the anonymised
+     extract; production would additionally expose identity-bridge,
+     propagation and collection gaps the file cannot show (pointer to the
+     Methodology investigation plan). The taxonomy itself is unchanged:
+     missing_click_id / click_id_not_found / outside_posthog_sample_window /
+     multiple_candidates / unknown.
+
+3. Methodology page (streamlit/sections/methodology.py) — four sections:
+   1. "Production attribution design" — the end-to-end identity flow
+      (ad click -> gclid/fbclid -> PostHog session + distinct_id ->
+      persistence/identity bridge -> affiliate outbound click ->
+      TrackNow click_id / affiliate_session_id -> conversion) rendered as a
+      code block, plus the role of every identifier: gclid/fbclid,
+      click_id_from_url, distinct_id, session_id, click_id,
+      affiliate_session_id. Two design constraints stated explicitly:
+      identifiers persisted with the session and propagated onto the
+      affiliate redirect; affiliate_session_id treated as part of the
+      TrackNow contract (a key to attribution) WITHOUT assuming it equals
+      PostHog.session_id.
+   2. "Sample implementation" — the four deterministic rules unchanged, but
+      framed as the sample implementation constraint, not the production
+      architecture. Rule 1 now says the absence of a documented contract is
+      a data limitation, NOT evidence that affiliate_session_id is
+      irrelevant.
+   3. NEW "How I would investigate the reported 18% attribution gap" — six
+      pseudo-BigQuery diagnostic queries (daily baseline; identifier
+      coverage incl. missing click_id/affiliate_session_id and
+      gclid/fbclid presence; gap by channel Google/Meta/other; gap by
+      device/browser/country incl. Safari/iOS and consent surfaces;
+      conversion lag between first paid session / affiliate click /
+      conversion; TrackNow propagation audit comparing outbound-click
+      values with conversion values) and six hypotheses, each with Test and
+      Fix: identifier lost before TrackNow; cross-session conversion;
+      cross-device/cookie reset/incognito; redirect stripping/affiliate
+      integration; consent/ad blocker/collection gap; ingestion
+      latency/freshness. Closes with the root-cause boundary statement:
+      the exact production root cause cannot be proven from the delivered
+      sample; the fix depends on which test wins.
+   4. "Limitations" and "Recommendations" — unchanged structure; the
+      "No fuzzy rules or undocumented bridges" limitation now says the
+      constraint is sample-deliberate and the production contract is in the
+      design section.
+
+4. dbt documentation (no SQL logic changed; join still exact only)
+   - docs/decisions.md: ADR 3 rewritten — exact click-id matching is what
+     the SAMPLE can prove; production needs an explicit identity contract
+     (capture, persistence, propagation, TrackNow contract including
+     affiliate_session_id); the sample does not prove affiliate_session_id
+     irrelevant. NEW ADR 11: the reported production gap (18%) and the
+     sample's match rate (0%) are different populations; never compared as
+     if one validates the other; no fuzzy bridge is added.
+   - int_conversion_attribution.sql header: now opens with "SAMPLE
+     IMPLEMENTATION CONSTRAINT, NOT THE PRODUCTION ARCHITECTURE... because
+     no documented cross-system bridge is available in the delivered data".
+   - schema.yml: int_conversion_attribution description carries the
+     sample-constraint framing; all four affiliate_session_id column
+     descriptions now scope the "not a join key" statement to the sample
+     and name it part of the production TrackNow identity contract.
+   - winner_rules.yml: unit-test description marked as sample-scope checks.
+
+5. README.md — walkthrough description updated to the new page structure
+   (two populations on Overview; four-part Methodology incl. investigation).
+
+Validation
+----------
+* dbt build (worktree dbt/, project-local profile from profiles.yml.example):
+  PASS=74 (4 tables, 5 views, 64 data tests, 1 unit test) ERROR=0 WARN=0.
+  The winner_rules unit test still passes unchanged — the exact-match logic
+  is intact.
+* pytest (full suite, worktree warehouse): 58 passed, 0 failed.
+  - Existing reconciliation guards still green (narrative derives all
+    numbers from the marts; override-warehouse regression test passes).
+  - New/updated AppTest coverage: overview two-population sections and
+    callout; methodology new headers, production design phrases, six query
+    titles, six hypothesis titles with Test/Fix bullets, root-cause
+    statement, 18% premise framing; analysis sample-scoped diagnosis.
+  - New tests/test_narrative_alignment.py (5 tests):
+      * no Streamlit source hardcodes the production metric ("Production
+        unmatched rate = 100%" etc. banned) and the callout's sample rate
+        reconciles with the health mart on render;
+      * 18% appears only as the reported premise (never derived);
+      * dbt docs never dismiss affiliate_session_id (banned phrases) and
+        carry the sample-constraint framing;
+      * no fuzzy construct (levenshtein/jaro/soundex/lower/translate) in
+        the attribution SQL — the only identifier join remains
+        `on cv.click_id = cs.identifier_value`.
+* Sample output still reconciles with the marts: analysis KPI test asserts
+  92 valid / 100 decided / 8 denied from the built relations (unchanged).
+
+Commit
+------
+f402420 docs(narrative): separate reported production gap from sample match rate (Card 1)
+12 files changed, 868 insertions(+), 110 deletions(-)
+Author: rafael.freitas <rafaelverdifreitas@hotmail.com>
+
+Review round 2 (2026-09-05) — Query 4 correction after changes_requested:
+- Query 4 rewritten: the unmatched cohort is profiled by device/browser/os/
+  country_code/consent_state taken from tracknow.outbound_clicks (the click
+  contract, same join shape as Query 6), isolated with NOT EXISTS on
+  posthog.sessions via t.attributed_session_id. No ph.* dimension, no
+  invented affiliate_session_id = PostHog.session_id.
+- Hypotheses 3 and 5 test references updated to match the new query shape.
+- Regression added: tests/test_narrative_alignment.py::
+  test_investigation_query_4_never_sources_dimensions_from_the_missing_session
+  (pins: no ph.* dimensions, no identity bridge, cohort predicate present,
+  dimensions from outbound_clicks, prose states the constraint).
+- Validation: pytest 59/59 PASS (dbt build 74/74 PASS).
+- Commit: see git log (fix after review round 1).
