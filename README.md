@@ -254,11 +254,94 @@ diagnostic `int_unmatched_conversions` view.
 
 ## BigQuery consumption asset
 
-`sql/bigquery/attribution_health.sql` is a BigQuery-compatible read-only
-consumer query over the published `marts.mart_attribution_health` relation.
-Replace the `project_id` placeholder with the target GCP project before
-execution. It does not deploy infrastructure or reimplement the dbt
+`sql/bigquery/commission_anomalies.sql` is the primary BigQuery consumption
+asset. It is a BigQuery Standard SQL anomaly-detection query over the
+authoritative production `analytics_core.f_commission_daily` relation,
+producing per firm-day commission, a 7-day rolling average (current row
+excluded), the percentage change vs that average, and an `anomaly` flag for
+absolute swings greater than 40%. Replace the `project_id` placeholder with the
+target GCP project before execution.
+
+`sql/bigquery/optional_attribution_health.sql` is a secondary, optional read
+over the local `marts.mart_attribution_health` monitoring mart; it is a
+material complement, not the production anomaly query.
+
+Neither asset deploys GCP infrastructure or reimplements the dbt
 transformation logic.
+
+## Production commission architecture
+
+The authoritative commission source is a **Google Sheet** maintained by the
+business. The planned production pipeline that consumes it is:
+
+```text
+Google Sheet commission
+        │
+        ▼
+Airbyte (ingestion)
+        │
+        ▼
+BigQuery raw          raw.google_sheets_commission_daily
+        │
+        ▼
+dbt staging           stg_commission_daily
+        │                 grain: (commission_date, firm_id)
+        │                 transforms: types, firm_id normalization,
+        │                   currency validation, duplicate detection,
+        │                   null checks
+        ▼
+intermediate          int_tracknow_commission_reconciliation
+        │                 grain: (commission_date, firm_id)
+        │                 fields: TrackNow-derived commission, official
+        │                   Google Sheet commission, absolute delta,
+        │                   pct delta, reconciliation status
+        ▼
+marts                 analytics_core.f_commission_daily
+                          (or its local alias fct_commission_daily)
+                          the official reporting-layer target
+```
+
+### Local sample vs production source
+
+The local repository delivers `marts.fct_commission_daily_local`, a **proxy**
+derived from the TrackNow `referral_bonus_gbp` field in the delivered
+`data/source.xlsx` sample. That proxy exists to demonstrate the pipeline shape
+and the Streamlit consumer with real, queryable numbers. It is **not** the
+authoritative source: the authoritative Google Sheet → Airbyte → BigQuery
+source was never provided. Not the authoritative production commission
+source; reporting, reconciliation, and anomaly detection in production must
+use `analytics_core.f_commission_daily`; the local proxy is a development
+stand-in only.
+
+### Staging model contract
+
+- **Model:** `stg_commission_daily`
+- **Grain:** one row per `(commission_date, firm_id)`
+- **Fields:**
+  - `commission_date`
+  - `firm_id` (normalized)
+  - `firm_name`
+  - `commission_amount`
+  - `sales_amount`
+  - `ingestion_timestamp`
+- **Responsibilities:** types, firm_id normalization, currency validation,
+  duplicate detection, null checks.
+
+### Intermediate / reconciliation contract
+
+- **Model:** `int_tracknow_commission_reconciliation`
+- **Grain:** one row per `(commission_date, firm_id)`
+- **Fields:**
+  - TrackNow-derived commission (local proxy)
+  - Official Google Sheet commission (production source)
+  - Absolute delta
+  - Pct delta
+  - Reconciliation status
+- **Rule:** the official Google Sheet value has precedence in the reporting
+  layer when the two sources disagree.
+
+None of this production GCP infrastructure exists in this repository; the
+delivered pipeline remains local and self-contained.
 
 ## Repository layout
 
@@ -277,11 +360,13 @@ dbt/tests/                         Singular tests (data contracts and invariants
 notebooks/01_data_exploration.ipynb  Pre-modeling EDA
 notebooks/README.md                How to run the EDA and what it found
 docs/decisions.md                  Closed project decisions (ADR-lite)
-sql/bigquery/attribution_health.sql  BigQuery mart consumption query
+| `sql/bigquery/commission_anomalies.sql` | BigQuery anomaly query over `analytics_core.f_commission_daily` |
+| `sql/bigquery/optional_attribution_health.sql` | Optional BigQuery read over `marts.mart_attribution_health` |
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
 streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
 streamlit/sections/                Walkthrough pages (overview, analysis, methodology, next_steps)
 tests/                             pytest suites (ingestion, bootstrap, structure)
+tests/sql/                         Static checks on the BigQuery SQL assets
 warehouse/pfm.duckdb               Generated local warehouse (ignored)
 ```
 

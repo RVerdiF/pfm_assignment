@@ -105,9 +105,10 @@ WHAT_STAYS = (
     ),
     (
         "Existing BigQuery-shaped asset",
-        "The repository already ships `sql/bigquery/attribution_health.sql`, "
-        "a BigQuery-compatible read over `marts.mart_attribution_health`; it "
-        "shows the mart contract is already consumable in that shape.",
+        "The repository already ships `sql/bigquery/commission_anomalies.sql`, "
+        "a BigQuery-compatible Standard SQL query over the authoritative "
+        "production `analytics_core.f_commission_daily`; it shows the "
+        "anomaly-detection contract is already consumable in that shape.",
     ),
 )
 
