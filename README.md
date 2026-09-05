@@ -283,7 +283,7 @@ Published relations consumed:
 
 #### Area 2 - Investigation, integration & monitoring
 The pages in Area 2 are design references that do not query the local warehouse:
-- **Investigation & monitoring**: documents the 18% gap investigation plan with six diagnostic BigQuery queries, six hypotheses with associated tests and fixes, and root-cause guidance.
+- **Investigation & monitoring**: documents the 18% gap investigation plan with four diagnostic BigQuery queries, four hypotheses with associated tests and fixes, and root-cause guidance.
 - **Data quality monitoring**: presents the five commission pipeline monitoring checks (freshness, conversion grain, unmatched rate regression, reconciliation variance, mapping coverage), P1/P2/P3 alert severities, and on-call routing policies (`docs/commission_monitoring_design.md`).
 - **QuickBooks reconciliation**: details the daily automated reconciliation pipeline between QuickBooks invoices and TrackNow commission (`docs/quickbooks_reconciliation_design.md`).
 - **What I'd do next**: engineering roadmap for migrating the local pipeline to GCP (BigQuery, Cloud Storage, Cloud Run Jobs, Terraform, CI/CD, and Cloud Monitoring).

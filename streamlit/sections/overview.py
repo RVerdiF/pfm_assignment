@@ -21,12 +21,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from warehouse_bootstrap import (
-    DEFAULT_DATABASE_PATH,
-    PROJECT_ROOT,
-    REQUIRED_RELATIONS,
-)
-from sections._components import require_connection, warehouse_readiness_banner
+from sections._components import require_connection
 
 # Architecture diagram, rendered via Mermaid with visual separation across pipeline stages:
 # Source -> Ingestion -> Warehouse -> Transformation -> Consumption.
@@ -145,7 +140,6 @@ def render() -> None:
     )
 
     connection = require_connection()
-    warehouse_readiness_banner(connection)
 
     # The sample-side number of the callout is read live from the health mart
     # (the full decided population), so it always reconciles with the marts
@@ -197,39 +191,3 @@ def render() -> None:
         "joins or business logic in Python (see Attribution analysis and "
         "Investigation & monitoring)."
     )
-
-    st.subheader("Relations this walkthrough reads")
-    counts: dict[str, int] = {}
-    for schema, relation in REQUIRED_RELATIONS:
-        try:
-            row = connection.execute(
-                f'select count(*) from "{schema}"."{relation}"'
-            ).fetchone()
-            counts[f"{schema}.{relation}"] = int(row[0]) if row else 0
-        except Exception as exc:  # pragma: no cover - read failure is surfaced
-            counts[f"{schema}.{relation}"] = -1
-            st.error(f"Could not read {schema}.{relation}: {exc}")
-    columns = st.columns(len(REQUIRED_RELATIONS))
-    for relation, column in zip(
-        (f"{schema}.{relation}" for schema, relation in REQUIRED_RELATIONS),
-        columns,
-        strict=True,
-    ):
-        column.metric(relation, f"{counts[relation]:,} rows")
-    st.caption(
-        "The `intermediate.int_unmatched_conversions` view provides "
-        "pre-computed categories for unmatched conversions, used directly "
-        "in the analysis and methodology tabs."
-    )
-
-    with st.expander("Warehouse details"):
-        st.write(f"Project root: {PROJECT_ROOT}")
-        st.write(f"Warehouse file: {DEFAULT_DATABASE_PATH}")
-        st.write(
-            "The app opens DuckDB in read-only mode to prevent warehouse "
-            "mutations."
-        )
-        st.write(
-            "If the warehouse file is missing at startup, the app automatically "
-            "runs ingestion and `dbt build` once before opening the connection."
-        )

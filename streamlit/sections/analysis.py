@@ -30,7 +30,6 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from warehouse_bootstrap import read_relation
 from sections._components import require_connection
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -182,17 +181,6 @@ def _render_overview(connection) -> None:
         f"Valid {metrics['conversions']:,} + denied {denied:,} = decided "
         f"{decided:,} - reconciled from the health mart."
     )
-
-    with st.expander("Detailed mart rows (audit)"):
-        st.caption(
-            "Raw rows from marts.fct_revenue_attribution - read-only view of "
-            "the exact relation behind every number on this page."
-        )
-        revenue = read_relation(connection, "fct_revenue_attribution")
-        st.dataframe(revenue, width="stretch", hide_index=True)
-        health = read_relation(connection, "mart_attribution_health")
-        st.caption("marts.mart_attribution_health - daily/source health.")
-        st.dataframe(health, width="stretch", hide_index=True)
 
 
 def _unmatched_reason_counts(connection) -> pd.DataFrame:
@@ -484,15 +472,6 @@ def _render_commission(connection) -> None:
         st.line_chart(
             proxy, x="conversion_date", y="commission_gbp", color="#9467bd"
         )
-    with st.expander("Daily proxy table (audit)"):
-        proxy_table = read_relation(connection, "fct_commission_daily_local")
-        st.caption(
-            "fct_commission_daily_local is a local proxy calculated from "
-            "TrackNow orders. The production analytics_core.f_commission_daily "
-            "table was not part of the provided data."
-        )
-        st.dataframe(proxy_table, width="stretch", hide_index=True)
-
     with st.expander("Production BigQuery: Commission anomaly detection query (Area 1, Question 3)"):
         st.caption(
             "This query targets the production contract provided in the assignment "
@@ -506,13 +485,6 @@ def _render_commission(connection) -> None:
             "- **Edge cases**: `SAFE_DIVIDE` avoids zero-division on zero/missing baselines; sorted by `absolute_revenue_impact DESC`."
         )
         st.code(_read_sql_asset("commission_anomalies.sql"), language="sql")
-
-    with st.expander("BigQuery consumption asset: Attribution health query"):
-        st.caption(
-            "Consumption query over the published `marts.mart_attribution_health` table "
-            "for BigQuery consumers (`sql/bigquery/attribution_health.sql`)."
-        )
-        st.code(_read_sql_asset("attribution_health.sql"), language="sql")
 
 
 def render() -> None:

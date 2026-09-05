@@ -51,111 +51,46 @@ def test_investigation_page_renders_the_reported_gap() -> None:
     assert "never " in body and "re-derived from the sample" in body
 
 
-def test_investigation_page_renders_the_six_diagnostic_queries() -> None:
+def test_investigation_page_renders_the_four_diagnostic_queries_in_expanders() -> None:
     at = _render()
     body = _body(at)
     code = _code(at)
-    # Element 2: the six diagnostic queries, each with its SQL sketch.
+    expander_labels = " ".join(
+        str(getattr(e, "label", getattr(e, "value", ""))) for e in at.expander
+    )
+    # Element 2: the four diagnostic queries, each inside its expander with SQL sketch.
     for phrase in [
         "Query 1 - Daily baseline of the gap",
         "Query 2 - Identifier coverage",
         "Query 3 - Gap by channel",
         "Query 4 - Gap by TrackNow-side dimensions",
-        "Query 5 - Conversion lag (cross-session loss)",
-        "Query 6 - Attribution bridge propagation audit",
     ]:
-        assert phrase in body
+        assert phrase in expander_labels or phrase in body
     # The sketches really are SQL over the documented production contract.
     assert "unmatched_rate" in code
     assert "tracknow.conversions" in code
     assert "posthog.sessions" in code
 
 
-def test_investigation_query_5_respects_the_documented_tracknow_grain() -> None:
-    """Query 5 must not invent a TrackNow conversion timestamp.
-
-    The documented TrackNow contract exposes only date-grain created_date
-    (ingestion/ingestion.md, staging.yml: conversion_date) - there is no
-    created_at or any conversion timestamp at raw level. The page promises
-    that no column is invented, so the executable part of Query 5 must run
-    at the documented date grain, and an hour-level lag may appear only as
-    an explicitly hypothetical future-contract field (t.conversion_at).
-    """
+def test_investigation_queries_count_and_scope() -> None:
+    """The investigation focuses on four diagnostic queries without hypothetical keys."""
     from sections.investigation import INVESTIGATION_QUERIES
 
-    title, purpose, sketch = next(
-        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 5"))
-    )
-    lowered = sketch.lower()
-    prose = purpose.lower()
-
-    # No undocumented TrackNow timestamp column anywhere in the sketch.
-    assert "created_at" not in lowered
-    assert "conversion_at" not in lowered.replace("t.conversion_at", "")
-
-    # The executable part runs at the documented date grain.
-    assert "t.created_date" in lowered
-    assert "session_lag_days" in lowered
-
-    # Hour-level lag exists only as an explicitly hypothetical
-    # future-contract field, with its cannot-run boundary stated.
-    assert "hypothetical field: t.conversion_at" in lowered
-    assert "cannot run against the supplied contract" in lowered
-    assert "future-production-contract extension" in prose
-
-    # The lag is measured against the live PostHog session through the
-    # bridge (same live-session semantics as Queries 1-4), not against an
-    # undocumented bridge timestamp column.
-    assert "date_diff(ph.session_start_at" not in lowered
-    assert "cast(t.created_date as timestamp)" not in lowered
-    assert "bridge.session_start_at" not in lowered
-    assert "attribution_generated" not in lowered
-    assert "left join posthog.sessions ph" in lowered
-
-    # BigQuery date/timestamp function choice and end-start direction:
-    # the executable day-grain lag is DATE_DIFF over DATE values with the
-    # conversion date as the end and the session start as the start (a
-    # conversion after its session is positive); the hypothetical
-    # hour-grain lag is TIMESTAMP_DIFF over timestamps with the same
-    # direction. Timestamps must never be passed to date_diff.
-    day_diffs = re.findall(
-        r"date_diff\(([^,()]+(?:\([^)]*\))?)\s*,"
-        r"\s*([^,()]+(?:\([^)]*\))?)\s*,\s*day\s*\)",
-        lowered,
-    )
-    assert day_diffs == [
-        ("t.created_date", "date(ph.session_start_at)")
-    ], day_diffs
-    hour_diffs = re.findall(
-        r"timestamp_diff\(([^,]+),\s*([^,]+),\s*hour\s*\)", lowered
-    )
-    assert hour_diffs == [("t.conversion_at", "ph.session_start_at")], (
-        hour_diffs
-    )
-    assert "date_diff(" in lowered  # executable part stays at date grain
-    assert "date_diff(t.conversion_at" not in lowered  # no DATE/TIMESTAMP mix
-
-    # Live-session existence semantics (same as Queries 1-4): the
-    # no_posthog_session flag tests ph.session_id after the LEFT JOIN -
-    # a matched row with a null timestamp is a matched session with
-    # unavailable lag, not a missing session.
-    assert "ph.session_id is null as no_posthog_session" in lowered
-    assert (
-        "ph.session_start_at is null as no_posthog_session" not in lowered
-    )
+    assert len(INVESTIGATION_QUERIES) == 4
+    for title, purpose, sketch in INVESTIGATION_QUERIES:
+        assert "event_id" not in sketch  # No hypothetical event_id join key
+        assert "tracknow.conversions" in sketch
 
 
 def test_investigation_page_renders_hypotheses_with_tests_and_fixes() -> None:
     at = _render()
     body = _body(at)
-    # Element 3: six hypotheses, each with a test and a fix.
+    # Element 3: four hypotheses, each with a test and a fix.
     for phrase in [
-        "Hypothesis 1 - Identifier lost before the bridge",
-        "Hypothesis 2 - Cross-session conversion",
-        "Hypothesis 3 - Cross-device / cookie reset / incognito",
-        "Hypothesis 4 - Redirect stripping / affiliate integration issue",
-        "Hypothesis 5 - Consent / ad blocker / PostHog collection gap",
-        "Hypothesis 6 - Ingestion latency / freshness",
+        "Hypothesis 1 - Identifier lost before or at affiliate redirect",
+        "Hypothesis 2 - Cross-session conversion & identity expiration",
+        "Hypothesis 3 - Partner / affiliate platform parameter stripping",
+        "Hypothesis 4 - Client-side collection drop (ad blockers / consent)",
         "**Test:**",
         "**Fix:**",
     ]:
@@ -173,7 +108,7 @@ def test_investigation_page_maps_the_six_area2_elements() -> None:
     body = _body(at)
     for element in [
         "Reported 18% gap",
-        "Investigation queries",
+        "Diagnostic queries",
         "Hypotheses and fixes",
         "QuickBooks reconciliation design",
         "Five monitoring checks",

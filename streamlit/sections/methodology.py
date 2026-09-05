@@ -13,8 +13,8 @@ This page is the Area 1 reference in three parts:
 3. **Limitations and recommendations** - what the sample cannot support and
    what would raise coverage.
 
-The investigation of the reported 18% production gap (six diagnostic queries
-and six hypotheses, each with a test and a fix) lives on the Area 2
+The investigation of the reported 18% production gap (four diagnostic queries
+and four hypotheses, each with a test and a fix) lives on the Area 2
 "Investigation & monitoring" page (streamlit/sections/investigation.py),
 alongside the area's monitoring and reconciliation designs. Nothing there is
 executed against production: the real tables were not delivered.

@@ -35,7 +35,7 @@ def test_no_em_dashes_in_source_or_docs() -> None:
     """Ensure no Unicode em-dashes exist in tracked source, docs, or SQL files."""
     for ext in ("*.py", "*.sql", "*.md", "*.yml", "*.yaml", "*.toml"):
         for path in ROOT.rglob(ext):
-            if any(part.startswith(".") for part in path.parts):
+            if any(part.startswith(".") or part in ("target", "venv", ".venv") for part in path.parts):
                 continue
             content = path.read_text(encoding="utf-8")
             assert "\u2014" not in content, f"Found forbidden em-dash in {path}"
