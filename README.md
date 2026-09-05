@@ -267,89 +267,26 @@ walkthrough pages — see the reproducible-bootstrap section above.
 
 ### Pages and relations
 
-The walkthrough is organised around the assignment's two areas. **Area 1 —
-Attribution & data modeling** holds the data-reading pages (`Overview`,
-`Attribution analysis`, `Methodology and limitations`), which read only the
-published consumer relations — the three marts and the single diagnostic
-intermediate view:
+The walkthrough is organised around the assignment's two areas:
 
-- the Overview page explains the assignment problem in prose, separates the
-  two populations the exercise talks about — the reported production gap
-  (18% of TrackNow conversions in the last 30 days with no matching PostHog
-  session, an assignment premise) and the anonymised sample this app
-  executes on (100 TrackNow conversions, 200 PostHog sessions) — renders the
-  real pipeline architecture as a diagram with one responsibility per layer,
-  and confirms the read-only marts connection;
-- `marts.fct_revenue_attribution` for valid-conversion revenue, commission,
-  match status, and UTM breakdowns;
-- `intermediate.int_unmatched_conversions` (a dbt diagnostic view, read for
-  its pre-computed `unmatched_reason` column only — never joined) for the
-  "what the provided sample can diagnose" audit panel;
-- `marts.mart_attribution_health` for daily/source attribution monitoring;
-- `marts.fct_commission_daily_local` for the clearly labelled local commission
-  proxy;
-- the Methodology and limitations page is organised in three parts: the
-  production attribution design (the intended identity flow from ad click to
-  TrackNow conversion, with the role of each identifier — `gclid`/`fbclid`,
-  `click_id`, `affiliate_session_id`, `distinct_id`, `session_id` — and the
-  two design constraints), the sample implementation (the deterministic
-  attribution rules in plain language — exact click-id matching, temporal
-  window, identifier priority, recency tie-break, and the matched /
-  ambiguous / unmatched outcomes — stated as a sample constraint, not the
-  production architecture), and the limitations with recommendations (each
-  citing the live loss cause it addresses). The investigation of the
-  reported 18% gap (six pseudo-BigQuery diagnostic queries and six
-  hypotheses, each with a test and a fix, plus the root-cause boundary
-  statement) lives on the Area 2 `Investigation & monitoring` page. The
-  observed-results interpretation reads totals live from the health mart,
-  the revenue mart, and the diagnostic reason view; the warehouse-specific
-  limitation figures — the decided/valid conversion counts, the
-  conversion-date span, and the outside-window count — are read live from
-  those same relations, never from fixed delivered-sample totals, so a
-  custom warehouse is not contradicted. The reported 18% is never re-derived
-  from any relation.
-- the closing `What I'd do next` page is a short, architecture-oriented
-  production-evolution outline (BigQuery as the managed warehouse with the
-  same dbt `raw -> staging -> intermediate -> marts` shape, dbt-bigquery as
-  the adapter, Cloud Storage as the landing zone, Cloud Run Jobs / Cloud
-  Build for execution and scheduling, Terraform for datasets/service
-  accounts/IAM/buckets, GitHub Actions for CI/CD, and Cloud Monitoring for
-  freshness/failure/match-rate/unmatched-reason observability). It is pure
-  prose: it reads no warehouse relation, renders no chart, and explicitly
-  states that none of that production infrastructure exists in this
-  repository — the delivered solution stays local and self-contained.
+#### Area 1 — Attribution & data modeling
+The pages in Area 1 read directly from the published marts and one diagnostic intermediate view:
+- **Overview**: presents the pipeline architecture, outlines each layer's responsibility, and distinguishes the reported 18% production gap (an assignment premise) from the extract's 0% match rate.
+- **Attribution analysis**: reports valid conversion volume, commission, match and non-match rates, and marketing attribution by UTM source. It visualizes the non-match taxonomy using `intermediate.int_unmatched_conversions` and reconciles decided rows against `marts.mart_attribution_health`.
+- **Methodology and limitations**: documents the target production identity flow (`gclid`/`fbclid`, `affiliate_session_id`), the sample's deterministic matching rules, dynamic metrics read live from the warehouse, and concrete data limitations.
 
-**Area 2 — Investigation, integration & monitoring** holds the pure-prose
-design pages; they read no warehouse relation:
+Published relations consumed:
+- `marts.fct_revenue_attribution`: valid conversions, commission, and channel attribution.
+- `marts.mart_attribution_health`: daily attribution health and population reconciliation.
+- `marts.fct_commission_daily_local`: local daily commission proxy.
+- `intermediate.int_unmatched_conversions`: pre-computed non-match reason breakdown (read-only diagnostic view).
 
-- the `Investigation & monitoring` page carries the area's investigation
-  narrative: the reported 18% gap (the assignment premise, never re-derived
-  from the sample), the six pseudo-BigQuery diagnostic queries that would run
-  against production, and the six hypotheses with a test and a fix each,
-  closing with the root-cause boundary statement — plus a map of the six
-  area elements pointing to the companion design pages;
-- the `Data quality monitoring` page presents the five data quality checks
-  for the commission pipeline — what each validates, its threshold, its
-  P1/P2/P3 severity, its implementation, and the on-call notification — plus
-  the alerting flow (monitoring table -> threshold evaluation ->
-  Slack/paging), the alert payload, and the monitoring architecture. It is
-  the Streamlit rendering of `docs/commission_monitoring_design.md`;
-- the `QuickBooks reconciliation` page presents the reconciliation pipeline
-  design (`docs/quickbooks_reconciliation_design.md`): layers and grains,
-  the firm mapping strategy, the reconciliation status taxonomy, and the
-  per-layer DQ checks.
-
-The analysis page presents four sections: an attribution overview with match
-and unmatched rates (the decided/denied audit reconciliation reads
-`marts.mart_attribution_health`), the unmatched-reason diagnosis (bar chart +
-table with the full dbt taxonomy zero-filled), marketing attribution by UTM
-source and by exact match method — with side-by-side bar charts for both
-conversions and commission by source — and revenue/commission with the daily
-proxy kept as an explicit complement. Every section opens with a short prose
-reading of the numbers so the page tells the story rather than showing raw
-charts. The app does not query raw or staging relations and does not perform
-attribution joins in Python; its only intermediate-layer read is the
-diagnostic `int_unmatched_conversions` view.
+#### Area 2 — Investigation, integration & monitoring
+The pages in Area 2 are design references that do not query the local warehouse:
+- **Investigation & monitoring**: documents the 18% gap investigation plan with six diagnostic BigQuery queries, six hypotheses with associated tests and fixes, and root-cause guidance.
+- **Data quality monitoring**: presents the five commission pipeline monitoring checks (freshness, conversion grain, unmatched rate regression, reconciliation variance, mapping coverage), P1/P2/P3 alert severities, and on-call routing policies (`docs/commission_monitoring_design.md`).
+- **QuickBooks reconciliation**: details the daily automated reconciliation pipeline between QuickBooks invoices and TrackNow commission (`docs/quickbooks_reconciliation_design.md`).
+- **What I'd do next**: engineering roadmap for migrating the local pipeline to GCP (BigQuery, Cloud Storage, Cloud Run Jobs, Terraform, CI/CD, and Cloud Monitoring).
 
 ## BigQuery consumption asset
 
@@ -405,12 +342,11 @@ marts                 analytics_core.f_commission_daily
 The local repository delivers `marts.fct_commission_daily_local`, a **proxy**
 derived from the TrackNow `referral_bonus_gbp` field in the delivered
 `data/source.xlsx` sample. That proxy exists to demonstrate the pipeline shape
-and the Streamlit consumer with real, queryable numbers. It is **not** the
-authoritative source: the authoritative Google Sheet → Airbyte → BigQuery
-source was never provided. Not the authoritative production commission
-source; reporting, reconciliation, and anomaly detection in production must
-use `analytics_core.f_commission_daily`; the local proxy is a development
-stand-in only.
+and the Streamlit consumer with real, queryable numbers.
+
+It is a development stand-in only: the authoritative Google Sheet → Airbyte → BigQuery
+source was not provided with this exercise. Production reporting, reconciliation,
+and anomaly detection must query `analytics_core.f_commission_daily` instead.
 
 ### Staging model contract
 
