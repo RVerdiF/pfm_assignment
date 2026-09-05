@@ -173,20 +173,26 @@ order by unmatched_conversions desc;""",
         "than to broken click tracking. The documented TrackNow contract "
         "exposes only a date-grain `created_date` — it has no conversion "
         "timestamp — so the executable part of this sketch runs at the "
-        "documented date grain, and the hour-level lag is shown only as a "
+        "documented date grain, computed as BigQuery `DATE_DIFF` over dates "
+        "with the conversion date as the end and the session start date "
+        "as the start, so a conversion after its session yields a "
+        "positive lag. The hour-level lag is shown only as a "
         "future-production-contract extension: it requires a hypothetical "
         "`t.conversion_at` conversion timestamp that the supplied TrackNow "
         "source does not document, so that part cannot run against the "
         "contract as supplied.",
         """\
 -- Executable part: documented date-grain fields only.
--- Date-grain lag between the winning session's start and the conversion
--- date. Finer than a day is impossible today: TrackNow documents only
--- created_date (no conversion timestamp).
+-- Date-grain lag between the winning session's start date and the
+-- conversion date, as BigQuery DATE_DIFF(end_date, start_date, granularity)
+-- over DATE values: conversion date as end, session start date as start,
+-- so a conversion after its session yields a positive lag. Finer than a
+-- day is impossible today: TrackNow documents only created_date (no
+-- conversion timestamp).
 select
   t.conversion_id,
-  date_diff(ph.session_start_at, cast(t.created_date as timestamp), day)
-                                                                as session_lag_days,
+  date_diff(t.created_date, date(ph.session_start_at), day)
+                                                           as session_lag_days,
   t.created_date,
   ph.session_start_at as winning_session_start,
   ph.session_start_at is null as no_posthog_session
@@ -202,9 +208,13 @@ order by session_lag_days desc;
 -- documented contract does not supply. HYPOTHETICAL FIELD: t.conversion_at
 -- (a future production-contract conversion timestamp; the sketch below
 -- cannot run against the supplied contract until that field exists).
+-- BigQuery TIMESTAMP_DIFF(end_timestamp, start_timestamp, granularity)
+-- over timestamp values: conversion timestamp as end, session start as
+-- start, so a conversion after its session yields a positive lag.
 select
   t.conversion_id,
-  date_diff(t.conversion_at, ph.session_start_at, hour)  as session_lag_hours
+  timestamp_diff(t.conversion_at, ph.session_start_at, hour)
+                                                       as session_lag_hours
 from tracknow.conversions t
 left join attribution.bridge bridge
   on bridge.click_id = t.click_id
