@@ -47,49 +47,44 @@ digraph pfm_architecture {
 }
 """
 
-# One-line responsibility per architecture layer, in pipeline order. This is
-# the textual companion to ARCHITECTURE_DOT and mirrors the real code layout.
+# One-line responsibility per architecture layer, in pipeline order.
 ARCHITECTURE_LAYERS = (
     (
         "Excel sample",
-        "The delivered workbook: conversion orders (TrackNow) and browsing "
-        "sessions (PostHog), the only inputs to the pipeline.",
+        "Delivered workbook containing TrackNow orders and PostHog browsing "
+        "sessions, the raw inputs for this pipeline.",
     ),
     (
         "Ingestion (Polars)",
-        "Reads both worksheets, normalizes column names to snake_case and "
-        "loads the values into the DuckDB raw schema, untouched.",
+        "Reads both Excel sheets, normalizes column headers to snake_case, "
+        "and loads raw records into DuckDB without applying business transforms.",
     ),
     (
         "DuckDB raw",
-        "Source-shaped tables (raw.tracknow_checkouts, raw.posthog_sessions) "
-        "that staging reads as the declared source.",
+        "Source tables (raw.tracknow_checkouts, raw.posthog_sessions) that "
+        "staging models reference as sources.",
     ),
     (
         "dbt staging",
-        "Clean, typed views over raw. They trim and type the columns, but no "
-        "attribution or business rule is applied here.",
+        "Type casting, string trimming, and basic column cleaning. No "
+        "business or attribution logic lives here.",
     ),
     (
         "dbt intermediate",
-        "Attribution preparation and decision. Candidates are listed first; "
-        "int_conversion_attribution then decides each conversion with the "
-        "exact click-id rules (see Methodology), and a diagnostic view "
-        "explains every non-matched conversion.",
+        "Candidate generation and attribution logic. Matches conversions to "
+        "sessions using exact click IDs, with a dedicated diagnostic view "
+        "explaining every unmatched row.",
     ),
     (
         "dbt marts",
-        "Consumer-facing tables: revenue/commission per conversion, the local "
-        "daily commission proxy, and the attribution-health mart used for "
-        "monitoring.",
+        "Analytical tables for consumption: revenue per conversion, a local "
+        "daily commission roll-up, and an attribution health monitoring mart.",
     ),
     (
         "Streamlit",
-        "This app. It opens the warehouse read-only and reads the published "
-        "marts plus the single diagnostic view "
-        "`intermediate.int_unmatched_conversions` (which explains why a "
-        "conversion was not matched); it never re-implements joins or "
-        "business rules.",
+        "Read-only presentation layer. Queries the published marts and the "
+        "diagnostic view directly, without re-implementing any joins or "
+        "business logic.",
     ),
 )
 
@@ -99,59 +94,39 @@ def render() -> None:
     st.write(
         "**The problem.** TrackNow records every conversion (an order) with a "
         "commission in GBP. PostHog records browsing sessions, some of which "
-        "carry click identifiers. To report commission by marketing channel "
-        "we must know which session drove each conversion — but not every "
-        "conversion carries an identifier that can be matched exactly, so a "
-        "share of conversions stays unattributed."
+        "carry click identifiers. To report commission by marketing channel, "
+        "we must know which session drove each conversion. When identifiers "
+        "are missing or mismatched, those conversions remain unattributed."
     )
 
     st.subheader("Purpose of this walkthrough")
     st.write(
-        "This app explains, without external documentation: **what** the data "
-        "is, **how** a conversion is attributed to a session, **how much** of "
-        "the sample can be attributed and why the rest cannot, and **what that "
-        "means** for reporting revenue and commission by channel. The pages "
-        "are grouped as the assignment's two areas: **Area 1 — Attribution & "
-        "data modeling** (Overview, Attribution analysis, Methodology and "
-        "limitations) and **Area 2 — Investigation, integration & monitoring** "
-        "(Investigation & monitoring, Data quality monitoring, QuickBooks "
-        "reconciliation, What I'd do next)."
-    )
-
-    st.subheader("How the pages map to the assignment")
-    st.markdown(
-        "- **Area 1 — Attribution & data modeling** — the executable sample "
-        "and its architecture (Overview), the observed results on the "
-        "anonymised sample (Attribution analysis), and the attribution "
-        "method, production identity design, and limitations (Methodology "
-        "and limitations)."
-    )
-    st.markdown(
-        "- **Area 2 — Investigation, integration & monitoring** — the "
-        "reported 18% gap with the production investigation queries and "
-        "hypotheses (Investigation & monitoring), the five data quality "
-        "checks with thresholds and P1/P2/P3 on-call routing (Data quality "
-        "monitoring), the QuickBooks → BigQuery → dbt reconciliation design "
-        "(QuickBooks reconciliation), and the production evolution outline "
-        "(What I'd do next). The Area 2 pages are design-only: they read no "
-        "warehouse relation."
+        "This app documents the pipeline and its results: data flow across "
+        "layers, how conversions match to sessions, why unmatched rows "
+        "occur in this sample, and the impact on channel reporting. "
+        "The walkthrough is organized into the two assignment areas:\n\n"
+        "- **Area 1 — Attribution & data modeling**: sample architecture (Overview), "
+        "observed findings on the extract (Attribution analysis), and deterministic "
+        "rules, production identity design, and limitations (Methodology and limitations).\n"
+        "- **Area 2 — Investigation, integration & monitoring**: diagnosing the reported "
+        "18% production gap (Investigation & monitoring), production data quality "
+        "checks and alerting (Data quality monitoring), QuickBooks to BigQuery "
+        "reconciliation design (QuickBooks reconciliation), and the engineering roadmap "
+        "(What I'd do next). The Area 2 pages are design references and do not query the warehouse."
     )
     st.write(
-        "The reported production gap of 18% is the thread that connects the "
-        "two areas: Area 1 explains how attribution should work and why "
-        "conversions go unmatched; Area 2 opens with the investigation of "
-        "that gap and defines how the pipeline would be monitored, "
-        "reconciled, and evolved so the gap is detected and closed."
+        "The reported 18% production gap connects both areas: Area 1 shows how "
+        "attribution handles identifiers and where sample rows drop, while Area 2 "
+        "investigates potential production root causes and specifies monitoring to catch them."
     )
 
     st.subheader("The reported production problem")
     st.write(
         "**Reported production issue (from the assignment):** 18% of "
         "TrackNow conversions in the last 30 days have no matching PostHog "
-        "session. That figure is an input premise of this exercise — it "
-        "describes the production tracking stack, not the delivered file — "
-        "and it is the subject of the Investigation & monitoring page in "
-        "Area 2. It is never re-derived from the sample."
+        "session. That figure is an input premise of this exercise describing the production "
+        "tracking stack, not this extract, and is never re-derived from the sample. "
+        "It is investigated on the Area 2 Investigation & monitoring page."
     )
 
     connection = require_connection()
@@ -175,12 +150,11 @@ def render() -> None:
     st.write(
         "The delivered workbook is an anonymised, bounded extract: 100 "
         "TrackNow conversions and 200 PostHog sessions. It exists so the "
-        "attribution pipeline can be modelled, executed, and inspected "
-        "end to end. The provided anonymised sample does not contain "
-        "deterministic cross-system identifier overlap, so the local "
-        "exact-match model attributes none of the sample's conversions "
-        "— a factual property of this file, not a measurement of "
-        "production and not a contradiction of the reported 18%."
+        "attribution pipeline can be modelled, executed, and inspected end "
+        "to end. The provided anonymised sample does not contain deterministic "
+        "cross-system identifier overlap, so the local exact-match model attributes "
+        "none of the sample's conversions — a factual property of this file, "
+        "not a measurement of production and not a contradiction of the reported 18%."
     )
     st.info(
         "Reported production gap: **18%**\n\n"
@@ -200,13 +174,13 @@ def render() -> None:
     for layer, responsibility in ARCHITECTURE_LAYERS:
         st.markdown(f"- **{layer}** — {responsibility}")
     st.write(
-        "Attribution is decided once, in dbt, using **exact click-identifier "
-        "matching** (gclid / fbclid / URL click id). The Streamlit app never "
-        "re-implements joins or business rules: it reads only the published "
-        "marts plus the single `intermediate.int_unmatched_conversions` "
-        "diagnostic view that explains why a conversion was not matched "
-        "(see the Attribution analysis and Investigation & monitoring "
-        "pages)."
+        "All attribution rules run inside dbt using exact click-identifier "
+        "matching (gclid, fbclid, and URL click IDs). The Streamlit app acts "
+        "strictly as a presentation layer: it reads the published marts and "
+        "a single diagnostic view (`intermediate.int_unmatched_conversions`) "
+        "to explain why conversions were not matched, without re-implementing "
+        "joins or business logic in Python (see Attribution analysis and "
+        "Investigation & monitoring)."
     )
 
     st.subheader("Relations this walkthrough reads")
@@ -228,21 +202,19 @@ def render() -> None:
     ):
         column.metric(relation, f"{counts[relation]:,} rows")
     st.caption(
-        "The `intermediate` row is the ADR-8 diagnostic view "
-        "`int_unmatched_conversions`, read for its pre-computed "
-        "`unmatched_reason` only — the analysis and methodology pages use it "
-        "to explain why a conversion was not matched."
+        "The `intermediate.int_unmatched_conversions` view provides "
+        "pre-computed categories for unmatched conversions, used directly "
+        "in the analysis and methodology tabs."
     )
 
     with st.expander("Warehouse details"):
         st.write(f"Project root: {PROJECT_ROOT}")
         st.write(f"Warehouse file: {DEFAULT_DATABASE_PATH}")
         st.write(
-            "The connection is opened read-only; this app cannot mutate the "
-            "warehouse."
+            "The app opens DuckDB in read-only mode to prevent warehouse "
+            "mutations."
         )
         st.write(
-            "If the warehouse is missing when the app starts, it is rebuilt "
-            "once per session by running ingestion and `dbt build` before the "
-            "read-only connection is opened."
+            "If the warehouse file is missing at startup, the app automatically "
+            "runs ingestion and `dbt build` once before opening the connection."
         )
