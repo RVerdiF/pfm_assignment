@@ -4,14 +4,19 @@ This page answers the assignment's analytical questions with the published dbt
 marts only:
 
 - Attribution overview: valid conversions, commission, match/unmatched rates.
-- Why conversions are not attributed: the ``unmatched_reason`` taxonomy from
-  the ``intermediate.int_unmatched_conversions`` diagnostic view.
+- What the provided sample can diagnose: the ``unmatched_reason`` taxonomy
+  from the ``intermediate.int_unmatched_conversions`` diagnostic view,
+  presented strictly as a diagnosis of the anonymised sample.
 - Marketing attribution by UTM source and match method (gclid / fbclid / URL
   click id). No channel is inferred for unmatched conversions. Conversions and
   commission are both broken down by source in side-by-side bar charts.
 - Revenue and commission: totals over the valid population, attributed vs
   unattributed, breakdown by source when attribution exists, and the local
   daily commission proxy as a clearly-labelled complement.
+
+Everything here describes the provided sample. Production root-cause claims
+are out of scope for this page: the reported 18% production gap is an
+assignment premise and its investigation plan lives on the Methodology page.
 
 No attribution rule, eligibility window, or business join is re-implemented
 here: every number is an aggregate over a relation produced by dbt.
@@ -98,16 +103,20 @@ def _render_overview(connection) -> None:
     metrics = _overview_metrics(connection)
 
     # What the evaluator should take away from the cards above: the sample is
-    # 100% unattributed, which the exact-only engine reports honestly.
+    # 100% unattributed under exact matching — a property of the anonymised
+    # sample, never a production measurement (ADR 11).
     if metrics["conversions"] and metrics["matched"] == 0:
         st.write(
             f"**Reading the cards.** This sample has {metrics['conversions']:,} "
             "valid conversions and every one is unattributed: the matched "
             "card shows 0 and the unmatched card shows the full population. "
-            "That is the exact-only engine refusing to invent a channel when "
-            "no TrackNow click id equals a PostHog identifier — the honest "
-            "result, not a missing step. The diagnosis section below explains "
-            "each of the reasons."
+            "Under the sample's exact click-id rule, no TrackNow click id "
+            "equals a PostHog identifier in the anonymised file, so the "
+            "engine reports zero matches rather than inventing a channel. "
+            "That is a property of this sample — it does not restate the "
+            "reported 18% production gap, which describes a different "
+            "population (see the Overview and Methodology pages). The "
+            "diagnosis section below classifies each non-match."
         )
 
     columns = st.columns(5)
@@ -203,13 +212,16 @@ def _unmatched_reason_counts(connection) -> pd.DataFrame:
 
 
 def _render_unmatched_diagnosis(connection) -> None:
-    st.subheader("Why conversions are not attributed")
+    st.subheader("What the provided sample can diagnose")
     st.caption(
         "Every conversion the attribution engine did not match "
         "(intermediate.int_unmatched_conversions, the full decided population "
         "including denied conversions). The reason is decided in dbt with the "
         "same exact click-id rule and eligibility window as the attribution "
-        "itself; this page only aggregates that explanation."
+        "itself; this page only aggregates that explanation. The taxonomy "
+        "diagnoses the anonymised sample — by itself it does not prove which "
+        "of the production hypotheses in the Methodology page drives the "
+        "reported 18% gap."
     )
     frame = _unmatched_reason_counts(connection)
 
@@ -224,8 +236,8 @@ def _render_unmatched_diagnosis(connection) -> None:
         not_found = counts.get("click_id_not_found", 0)
         missing = counts.get("missing_click_id", 0)
         st.write(
-            "**Where the loss happens.** The reasons map directly to "
-            "data-side gaps: **"
+            "**Where the loss happens in this sample.** The reasons map to "
+            "data-side gaps within the delivered file: **"
             f"{outside:,}** conversions fall outside the PostHog sample "
             "window (their orders predate the first session in the sample, "
             "or the only sessions carrying their click id come after the "
@@ -233,8 +245,11 @@ def _render_unmatched_diagnosis(connection) -> None:
             f"{not_found:,}** carry a click id that never appears in any "
             "PostHog session, and "
             f"**{missing:,}** have no click id at all and therefore cannot be "
-            "matched under an exact-only rule. Those are identifier-coverage "
-            "and sample-span gaps, not places where a better join would help."
+            "matched under the sample's exact-only rule. These are "
+            "identifier-coverage and sample-span properties of the "
+            "anonymised extract; production would additionally expose "
+            "identity-bridge, propagation, and collection gaps that this "
+            "file cannot show (see the Methodology investigation plan)."
         )
         if counts.get("multiple_candidates", 0) or counts.get("unknown", 0):
             st.write(

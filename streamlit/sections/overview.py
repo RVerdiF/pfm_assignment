@@ -3,11 +3,13 @@
 The first screen explains the assignment's purpose before any chart is shown:
 TrackNow records conversions with a commission, PostHog records sessions, and
 the pipeline measures how many conversions can be related to a session by an
-exact click identifier. It then shows the real architecture — Excel sample,
-Polars ingestion, DuckDB raw, dbt staging / intermediate / marts, and this
-read-only Streamlit app — with a one-line responsibility per layer, confirms
-the app is connected read-only to the published marts, and points to the
-deeper pages.
+exact click identifier. It separates the two populations the exercise talks
+about — the production system with its REPORTED 18% unmatched gap (an
+assignment premise, never re-derived here) and the anonymised sample this app
+executes on — then shows the real architecture — Excel sample, Polars
+ingestion, DuckDB raw, dbt staging / intermediate / marts, and this read-only
+Streamlit app — with a one-line responsibility per layer, confirms the app is
+connected read-only to the published marts, and points to the deeper pages.
 
 All numbers and relations shown come from dbt-published relations: the
 consumer marts plus the single ``intermediate.int_unmatched_conversions``
@@ -111,7 +113,53 @@ def render() -> None:
         "means** for reporting revenue and commission by channel. The pages "
         "are ordered as that story: Overview (context + architecture), "
         "Attribution analysis (observed results), and Methodology and "
-        "limitations (method, caveats, recommendations)."
+        "limitations (method, production design, investigation plan, caveats)."
+    )
+
+    st.subheader("The reported production problem")
+    st.write(
+        "**Reported production issue (from the assignment):** 18% of "
+        "TrackNow conversions in the last 30 days have no matching PostHog "
+        "session. That figure is an input premise of this exercise — it "
+        "describes the production tracking stack, not the delivered file — "
+        "and it is the subject of the investigation plan on the Methodology "
+        "page. It is never re-derived from the sample."
+    )
+
+    connection = require_connection()
+    warehouse_readiness_banner(connection)
+
+    # The sample-side number of the callout is read live from the health mart
+    # (the full decided population), so it always reconciles with the marts
+    # and with a PFM_DUCKDB_PATH override warehouse.
+    health_row = connection.execute(
+        "select coalesce(sum(total_conversions), 0), "
+        "coalesce(sum(matched_conversions), 0) "
+        "from marts.mart_attribution_health"
+    ).fetchone()
+    decided_total = int(health_row[0])
+    matched_total = int(health_row[1])
+    sample_match_display = (
+        f"{matched_total / decided_total:.0%}" if decided_total else "—"
+    )
+
+    st.subheader("What this executable sample demonstrates")
+    st.write(
+        "The delivered workbook is an anonymised, bounded extract: 100 "
+        "TrackNow conversions and 200 PostHog sessions. It exists so the "
+        "attribution pipeline can be modelled, executed, and inspected "
+        "end to end. The provided anonymised sample does not contain "
+        "deterministic cross-system identifier overlap, so the local "
+        "exact-match model attributes none of the sample's conversions "
+        "— a factual property of this file, not a measurement of "
+        "production and not a contradiction of the reported 18%."
+    )
+    st.info(
+        "Reported production gap: **18%**\n\n"
+        "Observed deterministic match rate in provided anonymised sample: "
+        f"**{sample_match_display}**\n\n"
+        "These numbers describe different populations and should not be "
+        "compared as if one validates the other."
     )
 
     st.subheader("Architecture")
@@ -131,9 +179,6 @@ def render() -> None:
         "diagnostic view that explains why a conversion was not matched "
         "(see the Attribution analysis and Methodology pages)."
     )
-
-    connection = require_connection()
-    warehouse_readiness_banner(connection)
 
     st.subheader("Relations this walkthrough reads")
     counts: dict[str, int] = {}

@@ -3,8 +3,10 @@ version: 2
 unit_tests:
   - name: int_conversion_attribution_winner_rules
     description: >-
-      Synthetic cases assert typed identifier priority, most recent typed
-      session selection, and NULL session fields for non-matches.
+      Sample-scope rule checks (ADR 3): synthetic cases assert typed
+      identifier priority, most recent typed session selection, and NULL
+      session fields for non-matches under the sample's exact click-id
+      matching constraint.
     model: int_conversion_attribution
     given:
       - input: ref("int_tracknow_attribution_candidates")

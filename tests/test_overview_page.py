@@ -49,6 +49,27 @@ def test_overview_page_states_the_problem_in_prose() -> None:
     assert "which session drove each conversion" in body
 
 
+def test_overview_page_separates_reported_gap_from_sample_rate() -> None:
+    """Card 1 reframe: two populations, clearly labelled (ADR 11).
+
+    The page must present the assignment's reported production 18% gap and
+    the sample's observed deterministic match rate as different populations,
+    and must never suggest one recalculates or validates the other.
+    """
+    at = _render()
+    assert not at.exception, at.exception
+    headers = {h.value for h in at.subheader}
+    assert "The reported production problem" in headers
+    assert "What this executable sample demonstrates" in headers
+    body = " ".join(str(el.value) for el in at.markdown)
+    # The 18% is cited as an assignment premise, not a sample measurement.
+    assert "18% of TrackNow conversions in the last 30 days" in body
+    assert "input premise" in body
+    # The sample side keeps the factual local observation, scoped to the file.
+    assert "anonymised, bounded extract" in body
+    assert "not a measurement of production" in body
+
+
 def test_overview_renders_architecture_diagram_with_real_stages() -> None:
     """The diagram must list the stages that actually exist in the repo."""
     at = _render()
