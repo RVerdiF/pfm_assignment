@@ -288,19 +288,13 @@ The pages in Area 2 are design references that do not query the local warehouse:
 - **QuickBooks reconciliation**: details the daily automated reconciliation pipeline between QuickBooks invoices and TrackNow commission (`docs/quickbooks_reconciliation_design.md`).
 - **What I'd do next**: engineering roadmap for migrating the local pipeline to GCP (BigQuery, Cloud Storage, Cloud Run Jobs, Terraform, CI/CD, and Cloud Monitoring).
 
-## BigQuery consumption asset
+## BigQuery consumption assets
 
-`sql/bigquery/commission_anomalies.sql` is the primary BigQuery consumption
-asset. It is a BigQuery Standard SQL anomaly-detection query over the
-authoritative production `analytics_core.f_commission_daily` relation,
-producing per firm-day commission, a 7-day rolling average (current row
-excluded), the percentage change vs that average, and an `anomaly` flag for
-absolute swings greater than 40%. Replace the `project_id` placeholder with the
-target GCP project before execution.
+`sql/bigquery/commission_anomalies.sql` is the direct answer to the assignment's BigQuery anomaly detection question (Area 1, Question 3). It is a BigQuery Standard SQL anomaly-detection query over the authoritative production `analytics_core.f_commission_daily` relation, producing per firm-day commission, a 7-day rolling calendar average (current row excluded), the percentage change vs that average, and an `anomaly` flag for absolute swings greater than 40%, ordered by absolute revenue impact descending. Replace the `project_id` placeholder with the target GCP project before execution.
 
-`sql/bigquery/optional_attribution_health.sql` is a secondary, optional read
-over the local `marts.mart_attribution_health` monitoring mart; it is a
-material complement, not the production anomaly query.
+> This query targets the production contract provided in the assignment and is not executed locally because `analytics_core.f_commission_daily` was not included in the supplied data.
+
+`sql/bigquery/attribution_health.sql` is a complementary consumption asset that exposes the dbt `marts.mart_attribution_health` monitoring table for BigQuery consumers; it serves a separate monitoring purpose and is not the anomaly query.
 
 Neither asset deploys GCP infrastructure or reimplements the dbt
 transformation logic.
@@ -398,7 +392,7 @@ requirements.txt                   Pinned runtime deps for the Community Cloud d
 pyproject.toml                     Project manifest for local development (PEP 621)
 docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/commission_anomalies.sql  BigQuery anomaly query over `analytics_core.f_commission_daily`
-sql/bigquery/optional_attribution_health.sql  Optional BigQuery read over `marts.mart_attribution_health`
+sql/bigquery/attribution_health.sql   BigQuery read over `marts.mart_attribution_health`
 docs/quickbooks_reconciliation_design.md  Area 2 design: QuickBooks -> Airbyte -> BigQuery -> dbt reconciliation -> alerts (design only)
 docs/commission_monitoring_design.md  Area 2 design: five data quality checks, thresholds, P1/P2/P3 severities, on-call routing (design only)
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)

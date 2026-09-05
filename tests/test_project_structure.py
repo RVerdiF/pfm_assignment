@@ -21,3 +21,11 @@ def test_bigquery_consumption_asset_is_checked_in() -> None:
     assert asset.is_file()
     sql = asset.read_text()
     assert "marts.mart_attribution_health" in sql
+
+
+def test_bigquery_commission_anomalies_asset_is_checked_in() -> None:
+    asset = ROOT / "sql" / "bigquery" / "commission_anomalies.sql"
+
+    assert asset.is_file()
+    sql = asset.read_text()
+    assert "analytics_core.f_commission_daily" in sql
