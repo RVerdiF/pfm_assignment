@@ -41,73 +41,66 @@ PRODUCTION_SUPPORT = (
     "Cloud Monitoring"
 )
 
-# What changes when the local solution moves to GCP. Each item names the
-# managed service and the job it would take over; none is implemented here.
+# What changes when the local solution moves to GCP.
 WHAT_CHANGES = (
     (
         "Warehouse",
-        "Replace the local DuckDB file with **BigQuery** as the managed "
-        "warehouse. dbt remains the transformation owner and keeps the same "
-        "layered shape: `raw -> staging -> intermediate -> marts`.",
+        "Migrate from local DuckDB to **BigQuery** as the managed warehouse. "
+        "dbt continues to own the transformations across the same layered "
+        "structure: `raw -> staging -> intermediate -> marts`.",
     ),
     (
         "dbt adapter",
-        "Run the models with **dbt-bigquery** instead of dbt-duckdb. Most of "
-        "the SQL logic and the model contracts would carry over; the changes "
-        "are adapter-specific (warehouse-specific SQL, BigQuery naming and "
-        "materialization details), not a rewrite of the transformation "
-        "design.",
+        "Switch to **dbt-bigquery**. SQL business logic and model contracts "
+        "remain intact; adjustments are strictly adapter-specific, covering "
+        "dialect syntax, partitioning, and clustering.",
     ),
     (
         "Ingestion and execution",
-        "When the source stops being a local workbook, **Cloud Storage** "
-        "becomes the landing zone and **Cloud Run Jobs** or **Cloud Build** "
-        "run ingestion and `dbt build` on the managed pipeline, on a managed "
-        "schedule when needed.",
+        "Replace manual spreadsheet loading by using **Cloud Storage** as "
+        "the landing zone. Automated workflows in **Cloud Run Jobs** or "
+        "Cloud Build then run ingestion and `dbt build` on scheduled triggers.",
     ),
     (
         "Infrastructure",
-        "Provision the production footprint with **Terraform**: BigQuery "
-        "datasets, service accounts, IAM, and auxiliary buckets/resources, "
-        "with the minimum permissions each stage needs (ingest, transform, "
-        "consume).",
+        "Manage all cloud resources with **Terraform**: datasets, storage "
+        "buckets, service accounts, and IAM roles granted with the minimum "
+        "permissions required for each stage (ingest, transform, consume).",
     ),
     (
         "CI/CD",
-        "Use **GitHub Actions** for lint and tests, `dbt parse` / `dbt "
-        "build` in a controlled environment, Terraform validation, and "
-        "deploys of infrastructure and pipeline.",
+        "Automate validation via **GitHub Actions**: run SQLFluff, pytest, and "
+        "`dbt build` in an isolated, controlled environment before deploying "
+        "pipeline changes.",
     ),
     (
         "Observability",
-        "Monitor the pipeline with **Cloud Monitoring**: data freshness, "
-        "ingestion failures, dbt failures, a drop in the attribution match "
-        "rate, an increase in `unmatched` or `ambiguous` conversions, and "
-        "abnormal shifts in the main non-attribution reasons.",
+        "Configure alerts in **Cloud Monitoring** for data freshness, job "
+        "failures, sudden drops in the attribution match rate, spikes in "
+        "`unmatched` or `ambiguous` conversions, or shifts in non-match "
+        "reasons.",
     ),
 )
 
-# What stays the same. The card asks for an explicit change-vs-constant split,
-# so each item names a contract this repository already ships that would
-# survive the move.
+# What stays the same.
 WHAT_STAYS = (
     (
         "Transformation contracts",
         "The dbt models keep owning the `raw -> staging -> intermediate -> "
-        "marts` layers and the deterministic exact click-id attribution rules; "
-        "the consumer still reads the same published mart contracts.",
+        "marts` lineage and deterministic attribution rules. Downstream "
+        "consumers query the exact same mart contracts.",
     ),
     (
         "Read-only consumption",
-        "The walkthrough stays a thin read-only consumer of the published "
-        "relations — now served from BigQuery marts instead of DuckDB — and "
-        "never re-implements attribution or business joins.",
+        "The reporting dashboard remains a thin, read-only consumer of "
+        "published marts (pointing to BigQuery instead of DuckDB), never "
+        "re-implementing joins or attribution logic.",
     ),
     (
         "Existing BigQuery-shaped asset",
-        "The repository already ships `sql/bigquery/attribution_health.sql`, "
-        "a BigQuery-compatible read over `marts.mart_attribution_health`; it "
-        "shows the mart contract is already consumable in that shape.",
+        "The repository already includes `sql/bigquery/attribution_health.sql`, "
+        "demonstrating that the mart contract is BigQuery-compatible and "
+        "ready for cloud BI tools.",
     ),
 )
 
@@ -115,8 +108,8 @@ WHAT_STAYS = (
 NOT_IMPLEMENTED_NOTE = (
     "Nothing on this page is implemented in this repository: there are no "
     "BigQuery datasets, no Terraform configuration, and no CI/CD pipeline. "
-    "It only describes the direction a production evolution would take while "
-    "the delivered solution stays local and self-contained."
+    "This roadmap simply outlines the architectural path to production while "
+    "keeping the delivered exercise fully local and self-contained."
 )
 
 

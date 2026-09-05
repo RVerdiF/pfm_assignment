@@ -95,11 +95,10 @@ def _overview_metrics(connection) -> dict[str, int | float]:
 def _render_overview(connection) -> None:
     st.subheader("Attribution overview")
     st.caption(
-        "Population: valid conversions from marts.fct_revenue_attribution "
-        "(denied conversions are excluded at the revenue layer; refunded ones "
-        "are kept). The wider decided population, including denied rows, is "
-        "reconciled in the audit strip below and in the health mart under "
-        "'Detailed mart rows (audit)'."
+        "Source: valid conversions in marts.fct_revenue_attribution (denied "
+        "orders excluded from revenue; refunded orders retained). The total "
+        "decided population, including denied rows, reconciles in the audit "
+        "metrics below and in the health mart table."
     )
     metrics = _overview_metrics(connection)
 
@@ -108,17 +107,15 @@ def _render_overview(connection) -> None:
     # sample, never a production measurement (ADR 11).
     if metrics["conversions"] and metrics["matched"] == 0:
         st.write(
-            f"**Reading the cards.** This sample has {metrics['conversions']:,} "
-            "valid conversions and every one is unattributed: the matched "
-            "card shows 0 and the unmatched card shows the full population. "
-            "Under the sample's exact click-id rule, no TrackNow click id "
-            "equals a PostHog identifier in the anonymised file, so the "
-            "engine reports zero matches rather than inventing a channel. "
-            "That is a property of this sample — it does not restate the "
-            "reported 18% production gap, which describes a different "
-            "population (see the Overview and Investigation & monitoring "
-            "pages). The "
-            "diagnosis section below classifies each non-match."
+            f"Across the {metrics['conversions']:,} valid conversions in this "
+            "sample, none matched a PostHog session: the matched card shows 0 "
+            "and the unmatched card contains the full cohort. Under exact "
+            "click-identifier rules, no TrackNow click ID in this extract "
+            "equals a PostHog click ID, so the pipeline outputs zero matches "
+            "rather than guessing a channel. That outcome is a property of "
+            "this sample rather than a restatement of the reported 18% production "
+            "gap (see Overview and Investigation & monitoring). The breakdown "
+            "below classifies each non-match."
         )
 
     columns = st.columns(5)
@@ -216,14 +213,12 @@ def _unmatched_reason_counts(connection) -> pd.DataFrame:
 def _render_unmatched_diagnosis(connection) -> None:
     st.subheader("What the provided sample can diagnose")
     st.caption(
-        "Every conversion the attribution engine did not match "
-        "(intermediate.int_unmatched_conversions, the full decided population "
-        "including denied conversions). The reason is decided in dbt with the "
-        "same exact click-id rule and eligibility window as the attribution "
-        "itself; this page only aggregates that explanation. The taxonomy "
-        "diagnoses the anonymised sample — by itself it does not prove which "
-        "of the production hypotheses in the Investigation & monitoring "
-        "page drives the reported 18% gap."
+        "Conversions without a match (from "
+        "intermediate.int_unmatched_conversions, covering all decided orders "
+        "including denied ones). Reasons are assigned directly in dbt using "
+        "the exact-match rules and time windows. This taxonomy diagnoses the "
+        "anonymised sample; it does not determine which production hypothesis "
+        "in Investigation & monitoring accounts for the reported 18% gap."
     )
     frame = _unmatched_reason_counts(connection)
 
@@ -238,27 +233,20 @@ def _render_unmatched_diagnosis(connection) -> None:
         not_found = counts.get("click_id_not_found", 0)
         missing = counts.get("missing_click_id", 0)
         st.write(
-            "**Where the loss happens in this sample.** The reasons map to "
-            "data-side gaps within the delivered file: **"
-            f"{outside:,}** conversions fall outside the PostHog sample "
-            "window (their orders predate the first session in the sample, "
-            "or the only sessions carrying their click id come after the "
-            "order date), **"
-            f"{not_found:,}** carry a click id that never appears in any "
-            "PostHog session, and "
-            f"**{missing:,}** have no click id at all and therefore cannot be "
-            "matched under the sample's exact-only rule. These are "
-            "identifier-coverage and sample-span properties of the "
-            "anonymised extract; production would additionally expose "
-            "identity-bridge, propagation, and collection gaps that this "
-            "file cannot show (see the Investigation & monitoring page)."
+            "The non-match reasons reflect concrete data gaps in this file: "
+            f"**{outside:,}** conversions fall outside the PostHog session "
+            "window (orders occurred before the sample began, or sessions with "
+            "matching click IDs occurred only after the conversion date), **"
+            f"{not_found:,}** carry click IDs that never appear in PostHog, and "
+            f"**{missing:,}** have no click ID at all. In production, losses "
+            "can also stem from redirect stripping, cookie resets, or bridge breaks, "
+            "as detailed on the Investigation & monitoring page."
         )
         if counts.get("multiple_candidates", 0) or counts.get("unknown", 0):
             st.write(
-                "The remaining buckets (`multiple_candidates`, `unknown`) are "
-                "residual: the engine found candidates but could not "
-                "deterministically choose one session, or could not prove "
-                "temporal eligibility."
+                "Any rows in `multiple_candidates` or `unknown` represent ties "
+                "where multiple sessions qualified or eligibility could not be "
+                "proven deterministically."
             )
 
     chart_columns = st.columns([2, 1])
@@ -334,10 +322,9 @@ def _match_method_counts(connection) -> pd.DataFrame:
 def _render_marketing_attribution(connection) -> None:
     st.subheader("Marketing attribution")
     st.caption(
-        "Attributed conversions only. No channel is inferred for unmatched "
-        "conversions: they roll into the 'Unattributed' bucket because the "
-        "matched session's UTM parameters are the only source of channel "
-        "information this pipeline trusts."
+        "Attributed conversions only. Unmatched conversions roll into "
+        "'Unattributed' because we only source UTM parameters from a "
+        "deterministically matched session."
     )
     by_source = _marketing_attribution(connection)
 
@@ -351,12 +338,11 @@ def _render_marketing_attribution(connection) -> None:
         )
         if unattributed == by_source["conversions"].sum():
             st.write(
-                "**Reading the charts.** Every conversion is in the "
-                "'Unattributed' bucket, so no channel can be read from this "
-                "sample. The pipeline refuses to infer a source: an "
-                "unmatched conversion carries no UTM data, and assigning it "
-                "to a channel would fabricate the very attribution this "
-                "exercise is meant to measure."
+                "Every conversion currently sits in the 'Unattributed' bucket, "
+                "so this sample cannot show marketing performance by channel. "
+                "The pipeline deliberately avoids guessing channels: "
+                "assigning unmatched orders without an exact click ID would "
+                "fabricate attribution rather than measure it."
             )
 
     # Visual requirement: bars for BOTH conversions and commission by source.
@@ -397,9 +383,9 @@ def _render_marketing_attribution(connection) -> None:
     )
     if method_frame["conversions"].sum() == 0:
         st.write(
-            "No conversions were matched in this sample, so no match method "
-            "was exercised. The zero rows above make that explicit instead of "
-            "hiding an absent channel signal."
+            "No conversions were matched in this sample, so no match methods "
+            "were triggered. Showing the zero counts keeps the absence of "
+            "attribution explicit rather than hiding it."
         )
     st.dataframe(
         method_frame.style.format({"conversions": "{:,.0f}"}),
@@ -427,10 +413,9 @@ def _render_commission(connection) -> None:
     st.subheader("Revenue and commission")
     commission = _commission_view(connection)
     st.caption(
-        "Commission on the valid population of marts.fct_revenue_attribution. "
-        "Because the sample has no matched conversions, the whole amount "
-        "falls into the unattributed bucket; no share is re-allocated to a "
-        "channel without an exact match."
+        "Commission from valid conversions in marts.fct_revenue_attribution. "
+        "Without matched sessions, the full balance remains unattributed; "
+        "no commission is distributed without an exact match."
     )
     # Interpretation in prose before the visual: this is the direct answer to
     # "how does coverage affect reading revenue/commission by channel?".
@@ -443,13 +428,12 @@ def _render_commission(connection) -> None:
             unattributed_rows["commission_gbp"].iloc[0]
         ) == total_gbp:
             st.write(
-                f"**Reading the chart.** The full **£{total_gbp:,.2f}** of "
-                "commission sits in the unattributed bucket. Splitting that "
-                "amount across channels without an exact match would invent a "
-                "distribution; the chart keeps it whole and labelled, which "
-                "is the only defensible reading for this sample. A future "
-                "sample with matched conversions will populate the attributed "
-                "side of this same chart automatically."
+                f"The full **£{total_gbp:,.2f}** in commission is recorded "
+                "under Unattributed. Splitting this revenue across channels "
+                "without verified session matches would invent figures; "
+                "keeping it unassigned is the only defensible choice for this "
+                "dataset. When run against data with valid click overlap, the "
+                "attributed breakdown populates automatically."
             )
     chart_columns = st.columns([2, 1])
     with chart_columns[0]:
@@ -470,8 +454,8 @@ def _render_commission(connection) -> None:
         )
 
     st.caption(
-        "Daily commission proxy (marts.fct_commission_daily_local) — "
-        "complementary view only."
+        "Daily commission trend (marts.fct_commission_daily_local) — "
+        "local proxy view."
     )
     proxy = connection.execute(
         """
@@ -491,9 +475,9 @@ def _render_commission(connection) -> None:
     with st.expander("Daily proxy table (audit)"):
         proxy_table = read_relation(connection, "fct_commission_daily_local")
         st.caption(
-            "fct_commission_daily_local is a sample-derived LOCAL proxy; the "
-            "authoritative analytics_core f_commission_daily source was not "
-            "provided with the assignment."
+            "fct_commission_daily_local is a local proxy calculated from "
+            "TrackNow orders. The production analytics_core.f_commission_daily "
+            "table was not part of the provided data."
         )
         st.dataframe(proxy_table, width="stretch", hide_index=True)
 

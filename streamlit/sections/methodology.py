@@ -468,47 +468,43 @@ def _limitation_notes(connection) -> list[tuple[str, str]]:
 def _page_intro() -> None:
     st.header("Methodology and limitations")
     st.write(
-        "This page is the walkthrough's reference, in three parts: how "
-        "attribution should work in production (Production attribution "
-        "design), how the executable sample decides attribution and what its "
-        "results mean (Sample implementation), and what this delivery cannot "
-        "claim (Limitations and recommendations). The investigation of the "
-        "reported 18% production gap lives on the Area 2 Investigation & "
-        "monitoring page. Every sample rule stated here is implemented once "
-        "in the dbt intermediate layer and documented in docs/decisions.md; "
-        "this app never re-applies the logic."
+        "Reference documentation for attribution logic across three areas: "
+        "the target production design, deterministic rules used for this "
+        "sample, and known data limitations. The investigation of the reported "
+        "18% production gap is on the Area 2 Investigation & monitoring page. "
+        "All transformation rules run inside dbt; this UI reports the resulting marts directly."
     )
 
 
 def _production_design_section() -> None:
     st.subheader("Production attribution design")
     st.write(
-        "The reported 18% gap is a failure mode of the identity flow between "
-        "the ad platforms, PostHog, and TrackNow. In production, attribution "
-        "should not be inferred after the conversion: the bridge between "
-        "systems must be explicit and designed. The intended end-to-end flow:"
+        "The reported 18% gap indicates a break somewhere in the identity "
+        "linkage across ad platforms, PostHog, and TrackNow. Rather than "
+        "guessing links after conversions occur, production needs an explicit "
+        "identity bridge. Here is how that end-to-end flow should work:"
     )
     st.code(PRODUCTION_IDENTITY_FLOW, language=None)
     st.write("Each identifier in that flow has a defined role:")
     for identifier, role in PRODUCTION_IDENTIFIER_ROLES:
         st.markdown(f"- **{identifier}** — {role}")
     st.write(
-        "Two design constraints follow. First, `gclid` / `fbclid` are "
-        "captured at the landing and must be persisted together with the "
-        "PostHog `distinct_id` / session, then propagated onto the affiliate "
-        "outbound click, so `attribution_click_id` can close the loop at the "
-        "conversion. Second, `affiliate_session_id` is treated as part of the "
-        "TrackNow contract — a key to attribution — without assuming that it "
-        "equals `PostHog.session_id`; whatever it references must be documented "
-        "by the integration, not guessed after the fact. `utm_content` is "
-        "preserved as Meta ad/creative enrichment (e.g. ad_id) for reporting "
-        "after the session is identified, not as a conversion→session key."
+        "This architecture establishes two key constraints. First, `gclid` "
+        "and `fbclid` captured on landing must persist alongside the PostHog "
+        "`distinct_id` and session, then forward onto the affiliate outbound "
+        "click so `attribution_click_id` closes the loop upon conversion. "
+        "Second, `affiliate_session_id` is one of the keys to attribution in "
+        "the TrackNow contract, without assuming that it equals "
+        "`PostHog.session_id`. Its exact relationship must be explicitly "
+        "documented by the integration team rather than assumed in SQL. "
+        "Finally, `utm_content` is preserved for ad-level creative reporting "
+        "(like ad_id), never as a join key between tables."
     )
     st.markdown("##### Edge cases and data-model handling")
     st.write(
         "The following structural boundaries apply regardless of which "
-        "production mechanism drives the reported gap. Each one names the "
-        "edge case, when it occurs, and how the data model resolves it."
+        "production mechanism drives the reported gap. Each entry outlines an "
+        "edge case, when it occurs, and how the data model handles it."
     )
     for case, when, handling in EDGE_CASES:
         st.markdown(f"- **{case}.** *When:* {when}. *Handling:* {handling}")
@@ -517,11 +513,9 @@ def _production_design_section() -> None:
 def _method_section() -> None:
     st.subheader("Sample implementation")
     st.write(
-        "The executable sample implements one deterministic answer per "
-        "conversion — **which PostHog session drove this order?** — with the "
-        "four rules below, applied in order by the `int_conversion_attribution` "
-        "dbt model. These rules describe what the anonymised sample supports, "
-        "not the production architecture above."
+        "The local pipeline determines one deterministic outcome per "
+        "conversion using four rules in `int_conversion_attribution`. These "
+        "rules govern how orders match to PostHog sessions in this sample:"
     )
     for title, body in METHOD_RULES:
         st.markdown(f"**{title}** — {body}")
@@ -532,10 +526,7 @@ def _method_section() -> None:
 
 def _results_section(facts: dict[str, int | float]) -> None:
     st.subheader("Interpreting the observed results")
-    st.write(
-        "The analysis page shows the numbers behind these statements; the "
-        "statements themselves are the interpretation."
-    )
+    st.write("Summary interpretations derived from the decided marts:")
 
     # The interpretation prose is built from the same live relation totals the
     # analysis page charts, so the text can never drift from the data.
