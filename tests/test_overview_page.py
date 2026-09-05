@@ -27,8 +27,14 @@ def _render() -> AppTest:
     return at
 
 
-def _graphviz_specs(at: AppTest) -> list[str]:
-    return [gv.proto.spec for gv in at.get("graphviz_chart")]
+def _architecture_diagram_specs(at: AppTest) -> list[str]:
+    mermaid = [
+        str(el.value)
+        for el in at.markdown
+        if "flowchart" in str(el.value) or "mermaid" in str(el.value)
+    ]
+    graphviz = [gv.proto.spec for gv in at.get("graphviz_chart")]
+    return mermaid + graphviz
 
 
 def test_overview_page_renders_with_real_warehouse() -> None:
@@ -74,7 +80,7 @@ def test_overview_renders_architecture_diagram_with_real_stages() -> None:
     """The diagram must list the stages that actually exist in the repo."""
     at = _render()
     assert not at.exception, at.exception
-    specs = _graphviz_specs(at)
+    specs = _architecture_diagram_specs(at)
     assert specs, "expected an architecture diagram on the overview page"
     joined = " ".join(specs)
     # The DOT payload carries the node labels; assert the real pipeline

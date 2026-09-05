@@ -19,12 +19,11 @@ import streamlit as st
 # What the page is: a design answer, not an implementation. Stated once at
 # the top so no section can be read as a shipped integration.
 DESIGN_INTRO = (
-    "**Design only — nothing here is implemented.** This page answers the "
-    "monitoring question: *how would QuickBooks invoices be reconciled "
-    "against TrackNow commission daily?* The full contract (raw fields, "
-    "model SQL, DQ checks, orchestration) is in "
-    "`docs/quickbooks_reconciliation_design.md`; this page shows the short "
-    "version."
+    "**Design only — nothing here is implemented.** This page outlines the daily "
+    "automated reconciliation between QuickBooks invoices and TrackNow commission. "
+    "The full technical specification (raw schema, SQL sketches, data quality checks, "
+    "and orchestration) is documented in `docs/quickbooks_reconciliation_design.md`; "
+    "this view summarizes the operational flow."
 )
 
 # The two-sided architecture the card asks for. One line per side, converging
@@ -104,12 +103,12 @@ LAYER_TABLE = (
 
 # The firm-mapping strategy, stated as the core decision of the design.
 MAPPING_STRATEGY = (
-    "The critical step is reaching ``firm_id`` **without assuming QuickBooks "
-    "uses the same IDs and without joining on firm name**. A curated bridge "
-    "dimension, ``dim_firm_accounting_mapping`` (dbt seed, one row per "
-    "(firm_id, valid_from), reviewed by Finance, with optional "
-    "``valid_from`` / ``valid_to``), maps ``quickbooks_customer_id -> firm_id``. Firm name "
-    "appears only as display metadata; it is never a join key."
+    "The key architectural decision is mapping to ``firm_id`` **without "
+    "assuming QuickBooks uses the same IDs and without joining on firm name**. "
+    "A curated bridge dimension, ``dim_firm_accounting_mapping`` (dbt seed, "
+    "one row per (firm_id, valid_from) reviewed by Finance with SCD-style dates), "
+    "maps ``quickbooks_customer_id -> firm_id``. Firm name appears only as display "
+    "metadata; it is never a join key."
 )
 
 # status -> rule, in evaluation order (first match wins).

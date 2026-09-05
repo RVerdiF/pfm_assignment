@@ -28,23 +28,37 @@ from warehouse_bootstrap import (
 )
 from sections._components import require_connection, warehouse_readiness_banner
 
-# Architecture diagram, one node per real pipeline stage. The DOT is rendered
-# client-side by Streamlit (no server-side graphviz binary required); the
-# labels below describe the same stages in words, one responsibility per layer.
-ARCHITECTURE_DOT = """\
-digraph pfm_architecture {
-  rankdir=LR;
-  node [shape=box, style="rounded,filled", fontname="helvetica", fontsize=11];
-  edge [fontname="helvetica", fontsize=10];
-  excel [label="Excel sample\\nTrackNow conversions\\nPostHog sessions", fillcolor="#e8eef7"];
-  ingestion [label="Ingestion (Polars)\\nload_excel.py", fillcolor="#fdeedd"];
-  raw [label="DuckDB raw\\nraw.tracknow_checkouts\\nraw.posthog_sessions", fillcolor="#e8eef7"];
-  staging [label="dbt staging\\nstg_tracknow_checkouts\\nstg_posthog_sessions", fillcolor="#e8eef7"];
-  intermediate [label="dbt intermediate\\nattribution candidates\\nexact-match decision", fillcolor="#f2e6f7"];
-  marts [label="dbt marts\\nfct_revenue_attribution\\nmart_attribution_health\\nfct_commission_daily_local", fillcolor="#e3f2e3"];
-  app [label="Streamlit\\nread-only walkthrough", fillcolor="#f7e6e6"];
-  excel -> ingestion -> raw -> staging -> intermediate -> marts -> app;
-}
+# Architecture diagram, rendered via Mermaid with visual separation across pipeline stages:
+# Source -> Ingestion -> Warehouse -> Transformation -> Consumption.
+ARCHITECTURE_MERMAID = """\
+flowchart LR
+    subgraph Source["Source"]
+        excel["Excel sample<br/>(TrackNow & PostHog)"]
+    end
+
+    subgraph Ingestion["Ingestion"]
+        ingest["Ingestion (Polars)<br/>load_excel.py"]
+    end
+
+    subgraph Warehouse["Warehouse"]
+        raw["DuckDB raw<br/>raw.tracknow_checkouts<br/>raw.posthog_sessions"]
+    end
+
+    subgraph Transformation["Transformation (dbt)"]
+        staging["dbt staging"]
+        intermediate["dbt intermediate"]
+        marts["dbt marts"]
+        staging --> intermediate --> marts
+    end
+
+    subgraph Consumption["Consumption"]
+        app["Streamlit<br/>read-only walkthrough"]
+    end
+
+    excel --> ingest
+    ingest --> raw
+    raw --> staging
+    marts --> app
 """
 
 # One-line responsibility per architecture layer, in pipeline order.
@@ -166,7 +180,7 @@ def render() -> None:
     )
 
     st.subheader("Architecture")
-    st.graphviz_chart(ARCHITECTURE_DOT)
+    st.mermaid_chart(ARCHITECTURE_MERMAID, width="stretch")
     st.caption(
         "Excel sample -> Polars ingestion -> DuckDB raw -> dbt staging -> "
         "dbt intermediate attribution -> dbt marts -> this Streamlit app "

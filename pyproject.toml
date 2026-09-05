@@ -21,7 +21,7 @@ dev = [
     "nbformat>=5.0",
 ]
 consumer = [
-    "streamlit>=1.35",
+    "streamlit>=1.59",
 ]
 
 [build-system]
