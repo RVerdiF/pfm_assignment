@@ -93,18 +93,24 @@ order by t.conversion_date;""",
         "Measure how often each attribution key is even present: missing "
         "`click_id`, missing `affiliate_session_id`, presence of an "
         "attribution bridge record, and conversions that carry an identifier "
-        "yet still fail to resolve a PostHog session.",
+        "yet still fail to resolve a live PostHog session (the bridge's "
+        "session_id is absent or dangling).",
         """\
 select
   count(*)                                                        as conversions,
   countif(t.click_id is null)                                     as missing_click_id,
   countif(t.affiliate_session_id is null)                         as missing_affiliate_session_id,
   countif(bridge.click_id is not null)                            as with_bridge_record,
+  -- bridge present but no live PostHog session: the bridge has no
+  -- session_id or its session_id no longer exists in PostHog (dangling),
+  -- matching the reported-gap definition used in Queries 1/3/4
   countif(bridge.click_id is not null
-          and bridge.session_id is null)                          as bridge_but_no_session
+          and ph.session_id is null)    as bridge_but_no_posthog_session
 from tracknow.conversions t
 left join attribution.bridge bridge
   on bridge.click_id = t.click_id
+left join posthog.sessions ph
+  on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day);""",
     ),
     (

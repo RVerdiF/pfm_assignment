@@ -209,6 +209,42 @@ def test_investigation_query_3_counts_dangling_bridge_sessions_as_unmatched() ->
     assert "group by bridge.acquired_channel" in lowered
 
 
+def test_investigation_query_2_resolution_uses_live_posthog_session() -> None:
+    """Query 2's unresolved metric must test the live PostHog session.
+
+    "Carries an identifier yet fails to resolve a PostHog session" means the
+    bridge's session_id is absent OR dangling (no row in PostHog). Testing
+    only bridge.session_id presence would count a dangling bridge session_id
+    as resolved, contradicting the reported-gap semantics of Queries 1/3/4.
+    The separate bridge-presence coverage metric must be preserved.
+    """
+    from sections.investigation import INVESTIGATION_QUERIES
+
+    title, purpose, sketch = next(
+        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 2"))
+    )
+    lowered = sketch.lower()
+
+    # PostHog is joined through the bridge so dangling session_ids fail.
+    assert "left join posthog.sessions ph" in lowered
+    assert "on ph.session_id = bridge.session_id" in lowered
+    # The unresolved metric is gated on bridge presence AND no live session.
+    assert (
+        "countif(bridge.click_id is not null\n"
+        "          and ph.session_id is null)" in lowered
+    )
+    # The wrong semantic (bridge session_id presence as the resolution test).
+    assert "and bridge.session_id is null)" not in lowered
+    # The bridge-presence coverage metric remains, unchanged in meaning.
+    # (Checked token-wise: the gate variant carries a newline before the
+    # closing paren, so the exact match only hits the coverage metric.)
+    assert "countif(bridge.click_id is not null)" in lowered
+    assert "with_bridge_record" in lowered
+    # The prose describes the live-session semantic.
+    assert "live posthog session" in purpose.lower()
+    assert "dangling" in purpose.lower()
+
+
 def test_readme_scope_boundary_distinguishes_premise_from_sample() -> None:
     """README's scope note must not deny showing the 18% production premise.
 
