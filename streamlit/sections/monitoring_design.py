@@ -15,7 +15,7 @@ DESIGN_INTRO = (
     "Production financial pipelines require explicit data quality boundaries. "
     "Five checks cover this commission architecture: source freshness, conversion grain, "
     "attribution quality, reconciliation variance, and accounting mapping "
-    "coverage. Each check specifies what it validates, warning thresholds, "
+    "coverage. Each check specifies what it validates, alert thresholds, "
     "P1/P2/P3 severity, and on-call response procedures. This is a design "
     "reference for production — nothing on this page is implemented in this repository."
 )
@@ -170,8 +170,8 @@ ARCHITECTURE_NOTE = (
     "start with native dbt tests and source freshness inside the transformation "
     "job, use scheduled queries or a dedicated monitoring model in Cloud Run / dbt "
     "Cloud for reconciliation, and wire alerts to Cloud Monitoring and Slack. "
-    "The local repository exercises this exact pattern with dbt tests and "
-    "the mart_attribution_health mart."
+    "The local repository already exercises the core data-quality contract "
+    "through dbt tests and the mart_attribution_health mart."
 )
 
 NOT_IMPLEMENTED_NOTE = (
