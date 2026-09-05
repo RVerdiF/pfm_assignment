@@ -177,6 +177,9 @@ def test_monitoring_page_is_registered_in_area2_navigation() -> None:
     area2 = nav_block[nav_block.index("Area 2") :]
     assert "Data quality monitoring" in area2
     assert 'url_path="monitoring-design"' in area2
+    # The Area 2 group opens with the Investigation & monitoring page.
+    assert "Investigation & monitoring" in area2
+    assert 'url_path="investigation-monitoring"' in area2
 
 
 def test_monitoring_design_doc_exists_with_card_elements_and_readme_link() -> None:

@@ -197,10 +197,11 @@ def test_methodology_page_renders_with_real_warehouse() -> None:
     headers = {h.value for h in at.subheader}
     assert "Production attribution design" in headers
     assert "Sample implementation" in headers
-    assert "How I would investigate the reported 18% attribution gap" in headers
     assert "Interpreting the observed results" in headers
     assert "Limitations" in headers
     assert "Recommendations" in headers
+    # The investigation section moved to the Area 2 Investigation & monitoring page.
+    assert not any("investigate" in h.lower() for h in headers)
 
 
 def test_methodology_page_explains_the_method() -> None:
@@ -237,8 +238,8 @@ def test_methodology_page_lists_limitations_and_recommendations() -> None:
         assert phrase in body
 
 
-def test_methodology_page_documents_production_design_and_investigation() -> None:
-    """Area 1 + Area 2 material: production design, 6 queries, 6 hypotheses."""
+def test_methodology_page_documents_production_design() -> None:
+    """Area 1 material: production design; queries/hypotheses moved to Area 2."""
     at = _render()
     assert not at.exception, at.exception
     body = _body(at)
@@ -247,12 +248,14 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
     code = " ".join(str(c.value) for c in at.code)
 
     # Production identity flow (code block) and identifier roles (markdown).
+    # (The investigation SQL sketches that carried `affiliate_session_id` in
+    # code moved to the Area 2 page; here the identifier appears in the roles
+    # prose, checked below with backticks.)
     for phrase in [
         "gclid",
         "fbclid",
         "attribution bridge",
         "click_id",
-        "affiliate_session_id",
     ]:
         assert phrase in code
     for phrase in [
@@ -263,37 +266,10 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
     ]:
         assert phrase in body
 
-    # The six diagnostic queries (titles as rendered by the section).
-    for phrase in [
-        "Query 1 — Daily baseline of the gap",
-        "Query 2 — Identifier coverage",
-        "Query 3 — Gap by channel",
-        "Query 4 — Gap by TrackNow-side dimensions",
-        "Query 5 — Conversion lag (cross-session loss)",
-        "Query 6 — Attribution bridge propagation audit",
-    ]:
-        assert phrase in body
-
-    # The six hypotheses, each with a Test and a Fix bullet.
-    for phrase in [
-        "Hypothesis 1 — Identifier lost before the bridge",
-        "Hypothesis 2 — Cross-session conversion",
-        "Hypothesis 3 — Cross-device / cookie reset / incognito",
-        "Hypothesis 4 — Redirect stripping / affiliate integration issue",
-        "Hypothesis 5 — Consent / ad blocker / PostHog collection gap",
-        "Hypothesis 6 — Ingestion latency / freshness",
-        "**Test:**",
-        "**Fix:**",
-    ]:
-        assert phrase in body
-
-    # The root-cause boundary is stated, and the 18% is framed as premise.
-    assert (
-        "The provided anonymised sample does not contain a deterministic "
-        "cross-system identity overlap" in body
-    )
-    assert "18% of TrackNow" in body
-    assert "assignment premise" in body
+    # The investigation narrative (queries/hypotheses) relocated to the Area 2
+    # page: this page must point there, not render it.
+    assert "Investigation & monitoring" in body
+    assert "Hypothesis 1" not in body
 
 
 def test_methodology_narrative_does_not_claim_sample_equals_production() -> None:

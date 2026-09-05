@@ -60,12 +60,16 @@ def test_pages_cite_the_reported_production_gap_as_premise() -> None:
     """The 18% figure appears only as the reported production premise."""
     overview = _read("streamlit", "sections", "overview.py")
     methodology = _read("streamlit", "sections", "methodology.py")
+    investigation = _read("streamlit", "sections", "investigation.py")
     assert "18%" in overview
     assert "Reported production issue" in overview
     assert "Reported production gap" in overview
     assert "never re-derived from the sample" in overview
     assert "18%" in methodology
     assert "assignment premise" in methodology
+    # The relocated investigation narrative keeps the premise framing.
+    assert "assignment premise" in investigation
+    assert "never " in investigation and "re-derived" in investigation
     # The 18% must not be derived from any warehouse relation on the pages.
     assert "unmatched_rate * 18" not in overview
     assert "0.18" not in overview
@@ -152,7 +156,7 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     (which TrackNow's staging schema does not carry), and never an identity
     bridge (affiliate_session_id = PostHog.session_id).
     """
-    from sections.methodology import INVESTIGATION_QUERIES
+    from sections.investigation import INVESTIGATION_QUERIES
 
     title, purpose, sketch = next(
         (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 4"))

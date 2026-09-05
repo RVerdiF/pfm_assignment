@@ -13,10 +13,12 @@ Pages follow the two assignment areas:
 
 - **Area 1 — Attribution & Data Modeling**: Overview, Attribution analysis,
   Methodology and limitations.
-- **Area 2 — Investigation, Integration & Monitoring**: Data quality
-  monitoring design, QuickBooks reconciliation pipeline (both pure-prose,
-  design-only pages that read no warehouse relation), closing with the
-  "What I'd do next" production-evolution outline (also pure prose).
+- **Area 2 — Investigation, Integration & Monitoring**: Investigation &
+  monitoring (the reported 18% gap, the production investigation queries and
+  hypotheses), Data quality monitoring design, QuickBooks reconciliation
+  pipeline (pure-prose, design-only pages that read no warehouse relation),
+  closing with the "What I'd do next" production-evolution outline (also
+  pure prose).
 
 Launch from the repository root:
 
@@ -37,6 +39,7 @@ if str(STREAMLIT_DIR) not in sys.path:
 
 from sections import (  # noqa: E402
     analysis,
+    investigation,
     methodology,
     monitoring_design,
     next_steps,
@@ -72,6 +75,11 @@ def main() -> None:
             ),
         ],
         "Area 2 — Investigation, integration & monitoring": [
+            st.Page(
+                investigation.render,
+                title="Investigation & monitoring",
+                url_path="investigation-monitoring",
+            ),
             st.Page(
                 monitoring_design.render,
                 title="Data quality monitoring",

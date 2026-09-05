@@ -46,7 +46,7 @@ def test_analysis_page_diagnosis_is_sample_scoped() -> None:
     The page must not claim the sample's identifiers prove the production
     root cause, and must not resurrect the old 'better join'/'honest result'
     narrative. The reported 18% production gap belongs to the Overview and
-    Methodology pages as an assignment premise.
+    Investigation & monitoring pages as an assignment premise.
     """
     at = _render()
     assert not at.exception, at.exception

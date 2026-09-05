@@ -16,7 +16,8 @@ marts only:
 
 Everything here describes the provided sample. Production root-cause claims
 are out of scope for this page: the reported 18% production gap is an
-assignment premise and its investigation plan lives on the Methodology page.
+assignment premise and its investigation lives on the Area 2 Investigation
+& monitoring page.
 
 No attribution rule, eligibility window, or business join is re-implemented
 here: every number is an aggregate over a relation produced by dbt.
@@ -115,7 +116,8 @@ def _render_overview(connection) -> None:
             "engine reports zero matches rather than inventing a channel. "
             "That is a property of this sample — it does not restate the "
             "reported 18% production gap, which describes a different "
-            "population (see the Overview and Methodology pages). The "
+            "population (see the Overview and Investigation & monitoring "
+            "pages). The "
             "diagnosis section below classifies each non-match."
         )
 
@@ -220,8 +222,8 @@ def _render_unmatched_diagnosis(connection) -> None:
         "same exact click-id rule and eligibility window as the attribution "
         "itself; this page only aggregates that explanation. The taxonomy "
         "diagnoses the anonymised sample — by itself it does not prove which "
-        "of the production hypotheses in the Methodology page drives the "
-        "reported 18% gap."
+        "of the production hypotheses in the Investigation & monitoring "
+        "page drives the reported 18% gap."
     )
     frame = _unmatched_reason_counts(connection)
 
@@ -249,7 +251,7 @@ def _render_unmatched_diagnosis(connection) -> None:
             "identifier-coverage and sample-span properties of the "
             "anonymised extract; production would additionally expose "
             "identity-bridge, propagation, and collection gaps that this "
-            "file cannot show (see the Methodology investigation plan)."
+            "file cannot show (see the Investigation & monitoring page)."
         )
         if counts.get("multiple_candidates", 0) or counts.get("unknown", 0):
             st.write(
