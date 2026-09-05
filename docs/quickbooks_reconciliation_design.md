@@ -105,7 +105,7 @@ _airbyte_extracted_at ingestion timestamp
 The core of the design: getting from a QuickBooks customer to a PFM
 `firm_id` **without assuming the IDs match and without joining on name**.
 
-- **Grain:** one row per `firm_id`.
+- **Grain:** one row per (`firm_id`, `valid_from`) — SCD-style temporal versions, so a firm can be remapped over time without losing history.
 - **Fields:** `firm_id`, `firm_name`, `quickbooks_customer_id`, optional
   `quickbooks_customer_name`, optional `valid_from` / `valid_to` if mappings
   can change over time.
@@ -169,12 +169,19 @@ reconciled as (
         i.period_end,
         i.invoice_total as quickbooks_invoice_amount,
         coalesce(sum(t.commission_amount), 0) as tracknow_commission_amount,
+        count(t.commission_date) as tracknow_row_count,
         i.currency_code
     from invoices i
     left join tracknow t
       on i.firm_id = t.firm_id
      and t.commission_date between i.period_start and i.period_end
-    group by 1, 2, 3, 4, 5, 6
+    group by
+        i.invoice_id,
+        i.firm_id,
+        i.period_start,
+        i.period_end,
+        i.invoice_total,
+        i.currency_code
 )
 
 select
@@ -216,7 +223,7 @@ Evaluated in this order (first match wins):
 | --- | --- |
 | `currency_mismatch` | Invoice currency is not GBP and no conversion contract is defined. |
 | `unmapped_firm` | `quickbooks_customer_id` has no row in `dim_firm_accounting_mapping`. |
-| `missing_tracknow` | Invoice with no TrackNow commission rows in its period. |
+| `missing_tracknow` | `tracknow_row_count = 0` — invoice whose period contains no TrackNow commission rows (distinguishes "no rows" from "rows summing to zero"). |
 | `missing_quickbooks` | Commission period with no covering invoice (inverse-direction rows). |
 | `matched` | `absolute_delta <= £5 OR pct_delta <= 1%` (example tolerance — **to validate with Finance**, configured as dbt vars, never hard-coded). |
 | `variance` | Difference above tolerance. |

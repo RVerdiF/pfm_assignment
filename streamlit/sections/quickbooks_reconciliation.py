@@ -73,7 +73,7 @@ LAYER_TABLE = (
     (
         "Mapping",
         "dim_firm_accounting_mapping",
-        "One row per firm_id",
+        "One row per (firm_id, valid_from) — SCD-style temporal versions",
         "Curated seed bridging QuickBooks customer -> PFM firm; never a name join",
     ),
     (
@@ -107,8 +107,8 @@ MAPPING_STRATEGY = (
     "The critical step is reaching ``firm_id`` **without assuming QuickBooks "
     "uses the same IDs and without joining on firm name**. A curated bridge "
     "dimension, ``dim_firm_accounting_mapping`` (dbt seed, one row per "
-    "firm_id, reviewed by Finance, with optional ``valid_from`` / "
-    "``valid_to``), maps ``quickbooks_customer_id -> firm_id``. Firm name "
+    "(firm_id, valid_from), reviewed by Finance, with optional "
+    "``valid_from`` / ``valid_to``), maps ``quickbooks_customer_id -> firm_id``. Firm name "
     "appears only as display metadata; it is never a join key."
 )
 
@@ -124,7 +124,7 @@ STATUS_RULES = (
     ),
     (
         "missing_tracknow",
-        "Invoice with no TrackNow commission rows in its period.",
+        "tracknow_row_count = 0 — invoice whose period contains no TrackNow commission rows (distinguishes no rows from rows summing to zero).",
     ),
     (
         "missing_quickbooks",

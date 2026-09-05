@@ -92,7 +92,7 @@ def test_quickbooks_page_shows_full_architecture_with_grains() -> None:
     ]
     grains = list(table["Grain"])
     assert "One row per raw invoice record/version" in grains[0]
-    assert "One row per firm_id" in grains[1]
+    assert "One row per (firm_id, valid_from)" in grains[1]
     assert "One row per current invoice" in grains[2]
     assert "(commission_date, firm_id)" in grains[3]
     assert "(invoice_id, firm_id)" in grains[4]
