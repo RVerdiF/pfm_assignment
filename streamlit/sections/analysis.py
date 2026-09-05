@@ -236,7 +236,7 @@ def _render_unmatched_diagnosis(connection) -> None:
             "The non-match reasons reflect concrete data gaps in this file: "
             f"**{outside:,}** conversions fall outside the PostHog session "
             "window (orders occurred before the sample began, or sessions with "
-            "matching click IDs arrived only after the conversion date), **"
+            "matching click IDs occurred only after the conversion date), **"
             f"{not_found:,}** carry click IDs that never appear in PostHog, and "
             f"**{missing:,}** have no click ID at all. In production, losses "
             "can also stem from redirect stripping, cookie resets, or bridge breaks, "

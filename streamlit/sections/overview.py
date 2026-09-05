@@ -116,8 +116,9 @@ def render() -> None:
     )
     st.write(
         "The reported 18% production gap connects both areas: Area 1 shows how "
-        "attribution handles identifiers and where sample rows drop, while Area 2 "
-        "investigates potential production root causes and specifies monitoring to catch them."
+        "attribution handles identifiers and why sample rows remain unmatched, "
+        "while Area 2 investigates potential production root causes and specifies "
+        "monitoring to catch them."
     )
 
     st.subheader("The reported production problem")

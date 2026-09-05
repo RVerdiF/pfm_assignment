@@ -479,10 +479,10 @@ def _page_intro() -> None:
 def _production_design_section() -> None:
     st.subheader("Production attribution design")
     st.write(
-        "The reported 18% gap reflects broken identity linkage across ad "
-        "platforms, PostHog, and TrackNow. Rather than guessing links after "
-        "conversions occur, production needs an explicit identity bridge. "
-        "Here is how that end-to-end flow should work:"
+        "The reported 18% gap indicates a break somewhere in the identity "
+        "linkage across ad platforms, PostHog, and TrackNow. Rather than "
+        "guessing links after conversions occur, production needs an explicit "
+        "identity bridge. Here is how that end-to-end flow should work:"
     )
     st.code(PRODUCTION_IDENTITY_FLOW, language=None)
     st.write("Each identifier in that flow has a defined role:")
