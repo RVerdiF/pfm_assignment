@@ -32,12 +32,12 @@ AREA_MAP = (
         "the problem baseline and assignment premise (below)",
     ),
     (
-        "Investigation queries",
-        "six diagnostic BigQuery queries to isolate where tracking breaks (below)",
+        "Diagnostic queries",
+        "four diagnostic BigQuery queries in expanders to isolate where tracking breaks (below)",
     ),
     (
         "Hypotheses and fixes",
-        "six concrete failure modes with test and remediation steps (below)",
+        "four concrete failure modes with test and remediation steps (below)",
     ),
     (
         "QuickBooks reconciliation design",
@@ -72,7 +72,7 @@ INVESTIGATION_QUERIES = (
 -- resolved a session_id: TrackNow LEFT JOIN bridge LEFT JOIN PostHog,
 -- unmatched = ph.session_id IS NULL.
 select
-  t.conversion_date,
+  t.created_date as conversion_date,
   count(*)                                                      as conversions,
   countif(ph.session_id is null)                                as unmatched,
   countif(ph.session_id is null) / count(*)                     as unmatched_rate
@@ -82,8 +82,8 @@ left join attribution.bridge bridge
 left join posthog.sessions ph
   on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-group by t.conversion_date
-order by t.conversion_date;""",
+group by t.created_date
+order by t.created_date;""",
     ),
     (
         "Query 2 - Identifier coverage",
@@ -162,95 +162,6 @@ where t.created_date >= date_sub(current_date(), interval 30 day)
 group by 1, 2, 3
 order by unmatched_conversions desc;""",
     ),
-    (
-        "Query 5 - Conversion lag (cross-session loss)",
-        "Measure the lag between the first/paid session, the affiliate "
-        "click, and the conversion. Long lags expose conversions lost to "
-        "lookback-window expiry or cross-session identity breaks rather "
-        "than to broken click tracking. The documented TrackNow contract "
-        "exposes only a date-grain `created_date` - it has no conversion "
-        "timestamp - so the executable part of this sketch runs at the "
-        "documented date grain, computed as BigQuery `DATE_DIFF` over dates "
-        "with the conversion date as the end and the session start date "
-        "as the start, so a conversion after its session yields a "
-        "positive lag. The hour-level lag is shown only as a "
-        "future-production-contract extension: it requires a hypothetical "
-        "`t.conversion_at` conversion timestamp that the supplied TrackNow "
-        "source does not document, so that part cannot run against the "
-        "contract as supplied.",
-        """\
--- Executable part: documented date-grain fields only.
--- Date-grain lag between the winning session's start date and the
--- conversion date, as BigQuery DATE_DIFF(end_date, start_date, granularity)
--- over DATE values: conversion date as end, session start date as start,
--- so a conversion after its session yields a positive lag. Finer than a
--- day is impossible today: TrackNow documents only created_date (no
--- conversion timestamp).
-select
-  t.conversion_id,
-  date_diff(t.created_date, date(ph.session_start_at), day)
-                                                           as session_lag_days,
-  t.created_date,
-  ph.session_start_at as winning_session_start,
-  -- Live-session semantics (same as Queries 1-4): a session is missing
-  -- when its row did not match (session_id null). A matched row with a
-  -- null timestamp keeps the lag nullable - timestamp completeness is
-  -- not session existence.
-  ph.session_id is null as no_posthog_session
-from tracknow.conversions t
-left join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-left join posthog.sessions ph
-  on ph.session_id = bridge.session_id
-where t.created_date >= date_sub(current_date(), interval 30 day)
-order by session_lag_days desc;
-
--- Hour-level lag requires a TrackNow conversion timestamp, which the
--- documented contract does not supply. HYPOTHETICAL FIELD: t.conversion_at
--- (a future production-contract conversion timestamp; the sketch below
--- cannot run against the supplied contract until that field exists).
--- BigQuery TIMESTAMP_DIFF(end_timestamp, start_timestamp, granularity)
--- over timestamp values: conversion timestamp as end, session start as
--- start, so a conversion after its session yields a positive lag.
-select
-  t.conversion_id,
-  timestamp_diff(t.conversion_at, ph.session_start_at, hour)
-                                                       as session_lag_hours
-from tracknow.conversions t
-left join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-left join posthog.sessions ph
-  on ph.session_id = bridge.session_id
-where t.created_date >= date_sub(current_date(), interval 30 day)
-order by session_lag_hours desc;""",
-    ),
-    (
-        "Query 6 - Attribution bridge propagation audit",
-        "Audit whether the identifier captured at the outbound affiliate click "
-        "is the same one that reappears on the conversion. Requires a stable "
-        "click identifier (e.g. event_id or click_ref) that links the outbound "
-        "click to the conversion independently of the attribution bridge. "
-        "Without this documented key, the audit cannot distinguish propagation "
-        "loss from a join miss.",
-        """\
--- Audit: does the click identifier survive from outbound click to conversion?
--- Requires a stable click key (e.g. event_id, click_ref) that identifies the
--- same click event across both tables, independent of the attribution bridge.
--- Without this documented key, this audit cannot run as written.
-select
-  oc.click_id as outbound_click_id,
-  c.click_id  as conversion_click_id,
-  oc.click_id is distinct from c.click_id as click_id_changed,
-  c.affiliate_session_id is distinct from oc.affiliate_session_id
-                                                               as session_id_changed,
-  count(*) as conversions
-from tracknow.conversions c
-join tracknow.outbound_clicks oc
-  on oc.event_id = c.event_id   -- hypothetical stable click key
-where c.created_date >= date_sub(current_date(), interval 30 day)
-group by 1, 2, 3, 4
-order by conversions desc;""",
-    ),
 )
 
 # The hypothesis set for the reported gap. Each hypothesis names the test
@@ -258,70 +169,43 @@ order by conversions desc;""",
 # be proven by the delivered sample.
 INVESTIGATION_HYPOTHESES = (
     (
-        "Hypothesis 1 - Identifier lost before the bridge",
+        "Hypothesis 1 - Identifier lost before or at affiliate redirect",
         "`gclid` / `fbclid` exists on the landing session but is never "
-        "persisted or propagated onto the affiliate link, so TrackNow "
+        "persisted or attached to the affiliate outbound link, so TrackNow "
         "receives a click it cannot tie to PostHog.",
-        "**Test:** compare identifier coverage along the funnel - landing "
-        "session vs affiliate outbound click vs TrackNow conversion (queries "
-        "2 and 6).",
+        "**Test:** compare identifier coverage in Query 2 (missing click_id "
+        "vs with_bridge_record) and channel breakdown in Query 3.",
         "**Fix:** persist ad-click identifiers first-party and attach them "
-        "consistently to the affiliate redirect.",
+        "consistently to the affiliate outbound redirect.",
     ),
     (
-        "Hypothesis 2 - Cross-session conversion",
+        "Hypothesis 2 - Cross-session conversion & identity expiration",
         "The user enters through paid traffic but converts in a later "
-        "session, so the converting session carries no click identifier and "
-        "the original paid session is never linked.",
-        "**Test:** find `distinct_id`s with an earlier paid session and a "
-        "later conversion session that carries no click parameter (queries 1 "
-        "and 5).",
+        "session or after cookie reset, so the converting session carries no "
+        "click identifier and the original ad click is never linked.",
+        "**Test:** inspect daily trend in Query 1 and first-order breakdown "
+        "in Query 4 alongside multi-session identity tracking.",
         "**Fix:** keep first-party attribution state per user/browser for a "
-        "defined window, so late conversions still resolve to the acquiring "
-        "click.",
+        "defined lookback window and stitch identities upon login.",
     ),
     (
-        "Hypothesis 3 - Cross-device / cookie reset / incognito",
-        "The PostHog `distinct_id` changes before purchase (new device, "
-        "cleared cookies, incognito), so the converting identity never saw "
-        "the ad click.",
-        "**Test:** unmatched conversions broken down by firm/trading "
-        "platform/first-order status (query 4), plus identity-reset "
-        "analysis over the identities that do resolve.",
-        "**Fix:** identity stitching on login/account identifier, keeping an "
-        "anonymous-to-known mapping so pre-login sessions survive.",
+        "Hypothesis 3 - Partner / affiliate platform parameter stripping",
+        "An affiliate network or partner trading platform strips query "
+        "parameters on redirect or checkout, so the click identifier never reaches TrackNow.",
+        "**Test:** unmatched rate breakdown by `firm_id` and `trading_platform` "
+        "(Query 4) and by `acquired_channel` (Query 3).",
+        "**Fix:** standardize redirect parameter templates with partner networks "
+        "and add automated tracking QA tests asserting parameter survival.",
     ),
     (
-        "Hypothesis 4 - Redirect stripping / affiliate integration issue",
-        "An affiliate network or redirect template strips query parameters, "
-        "so the click identifier never reaches TrackNow.",
-        "**Test:** unmatched rate by firm / trading platform (query 4) "
-        "and by acquired channel (query 3) to expose specific partners "
-        "losing parameters (query 6).",
-        "**Fix:** repair the redirect template and add automated tracking "
-        "QA that asserts parameter survival end to end.",
-    ),
-    (
-        "Hypothesis 5 - Consent / ad blocker / PostHog collection gap",
-        "The TrackNow conversion happens, but the PostHog session is never "
-        "recorded client-side (consent not granted, blocker, script "
+        "Hypothesis 4 - Client-side collection drop (ad blockers / consent)",
+        "The TrackNow conversion happens server-side, but the PostHog session "
+        "is never recorded client-side (consent not granted, ad blocker, script "
         "failure).",
-        "**Test:** unmatched conversions broken down by firm/trading "
-        "platform/first-order status (query 4), plus a comparison of "
-        "server-side TrackNow volume against client-side analytics volume "
-        "over time (query 1).",
-        "**Fix:** capture the critical identifiers server-side or route "
+        "**Test:** compare server-side TrackNow volume against client-side "
+        "analytics volume over time (Query 1) across devices/platforms.",
+        "**Fix:** capture critical conversion identifiers server-side or route "
         "analytics through a first-party tracking endpoint.",
-    ),
-    (
-        "Hypothesis 6 - Ingestion latency / freshness",
-        "The two systems land data at different speeds, so conversions are "
-        "counted as unmatched until the matching PostHog session arrives.",
-        "**Test:** re-run the match over an older window and count records "
-        "that flip from unmatched to matched after reprocessing (query 1 "
-        "repeated over time).",
-        "**Fix:** late-arriving-data handling with incremental lookback "
-        "reprocessing instead of point-in-time matching.",
     ),
 )
 
@@ -331,7 +215,7 @@ ROOT_CAUSE_STATEMENT = (
     "The provided anonymised sample does not contain a deterministic "
     "cross-system identity overlap. The investigation above is designed to "
     "isolate whether the gap comes from identifier capture, propagation, "
-    "identity persistence, client-side collection, or ingestion latency."
+    "identity persistence, or client-side collection."
 )
 
 
@@ -360,14 +244,14 @@ def render() -> None:
     st.caption(
         "Queries use BigQuery SQL over documented production contracts "
         "(TrackNow conversions, PostHog sessions, and the attribution bridge). "
-        "Any hypothetical fields beyond current schemas (like bridge keys or timestamps) "
-        "are explicitly noted."
+        "Any hypothetical fields beyond current schemas are explicitly noted."
     )
 
-    st.markdown("##### Investigation queries")
+    st.markdown("##### Diagnostic queries (BigQuery)")
     for title, purpose, sketch in INVESTIGATION_QUERIES:
-        st.markdown(f"**{title}.** {purpose}")
-        st.code(sketch, language="sql")
+        with st.expander(title):
+            st.markdown(f"**Objective:** {purpose}")
+            st.code(sketch, language="sql")
 
     st.markdown("##### Hypotheses")
     for title, body, test, fix in INVESTIGATION_HYPOTHESES:
@@ -379,11 +263,10 @@ def render() -> None:
     st.write(ROOT_CAUSE_STATEMENT)
     st.write(
         "Remediation depends on which test confirms the root cause: fixing "
-        "persistence and propagation across redirects (Hypothesis 1), introducing "
-        "first-party attribution state (Hypothesis 2), stitching user identities on "
-        "login (Hypothesis 3), repairing affiliate redirect parameters with automated "
-        "QA (Hypothesis 4), capturing critical identifiers server-side (Hypothesis 5), "
-        "or adding incremental lookback reprocessing for late-arriving sessions (Hypothesis 6)."
+        "persistence and propagation across affiliate redirects (Hypothesis 1), "
+        "introducing first-party multi-session attribution state (Hypothesis 2), "
+        "repairing affiliate partner redirect parameter stripping (Hypothesis 3), "
+        "or routing client-side analytics through a first-party proxy / server-side capture (Hypothesis 4)."
     )
     st.caption(
         "This page is a design reference and does not query the warehouse: the "

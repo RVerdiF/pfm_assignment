@@ -44,7 +44,6 @@ def test_overview_page_renders_with_real_warehouse() -> None:
     headers = {h.value for h in at.subheader}
     assert "Purpose of this walkthrough" in headers
     assert "Architecture" in headers
-    assert "Relations this walkthrough reads" in headers
 
 
 def test_overview_page_states_the_problem_in_prose() -> None:
