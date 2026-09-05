@@ -6,8 +6,11 @@ models:
       One row per TrackNow conversion (grain: conversion_id). This model
       prepares the TrackNow side of attribution WITHOUT deciding it: it carries
       the identifiers that could link a conversion to a PostHog session plus
-      explicit presence flags. No identifier is treated as a join key here;
-      affiliate_session_id is never assumed to equal a PostHog session_id.
+      explicit presence flags. Sample-scope note: no identifier is treated as
+      a join key here, and affiliate_session_id is never assumed to equal a
+      PostHog session_id — the sample provides no documented bridge proving
+      one. In production, affiliate_session_id is part of the TrackNow
+      identity contract (see docs/decisions.md ADR 3), not an ignorable field.
     columns:
       - name: conversion_id
         description: Unique TrackNow order identifier (from staging). One row per conversion.
@@ -24,7 +27,9 @@ models:
       - name: affiliate_session_id
         description: >-
           Session id assigned by TrackNow when the affiliate link was clicked.
-          Null when absent. NOT assumed to equal a PostHog session_id.
+          Null when absent. In this sample it is not assumed to equal a
+          PostHog session_id (no documented contract in the delivered data);
+          in production it is one of the TrackNow attribution keys.
       - name: tracknow_user_id
         description: >-
           TrackNow internal user id (staging-normalized). Null when absent.
@@ -64,19 +69,22 @@ models:
   - name: int_conversion_attribution
     description: >
       One row per TrackNow conversion (grain: conversion_id) with a fully
-      deterministic attribution decision. A conversion is attributed only via
-      an EXACT equality between its click_id and a PostHog click identifier
-      value (gclid, fbclid, or click_id_from_url) from
-      int_posthog_attribution_candidates. Eligibility window:
-      session_date <= conversion_date (TrackNow exposes only a date, so no
-      conversion time is invented). Typed identifiers (gclid/fbclid) outrank
-      the generic click_id_from_url; among the winning type the most recent
-      session (largest session_start_at) is chosen. A conversion with exactly
-      one finalist is 'matched'; more than one finalist ties for first is
-      'ambiguous'; no eligible exact match is 'unmatched'. The
-      attribution_session_* columns are populated only for 'matched' rows.
-      No fuzzy matching, no affiliate_session_id = session_id bridge, no
-      invented conversion time.
+      deterministic attribution decision. SAMPLE IMPLEMENTATION CONSTRAINT: for
+      the provided sample, a conversion is attributed only via an EXACT
+      equality between its click_id and a PostHog click identifier value
+      (gclid, fbclid, or click_id_from_url) from
+      int_posthog_attribution_candidates, because no documented cross-system
+      bridge is available in the delivered data — this is a constraint of the
+      anonymised sample, not the production attribution design (ADR 3 / ADR 11).
+      Eligibility window: session_date <= conversion_date (TrackNow exposes
+      only a date, so no conversion time is invented). Typed identifiers
+      (gclid/fbclid) outrank the generic click_id_from_url; among the winning
+      type the most recent session (largest session_start_at) is chosen. A
+      conversion with exactly one finalist is 'matched'; more than one finalist
+      ties for first is 'ambiguous'; no eligible exact match is 'unmatched'.
+      The attribution_session_* columns are populated only for 'matched' rows.
+      No fuzzy matching, no assumed affiliate_session_id = session_id bridge,
+      no invented conversion time.
     columns:
       - name: conversion_id
         description: Unique TrackNow order identifier. One row per conversion.
@@ -91,8 +99,9 @@ models:
           absent; a conversion without a click id is never attributed.
       - name: affiliate_session_id
         description: >-
-          TrackNow-side session id. Carried for audit only; NOT used as a join
-          key to PostHog.
+          TrackNow-side session id. Carried for audit only in this sample (the
+          sample exposes no documented bridge to PostHog); in production it is
+          part of the TrackNow identity contract, not an ignorable field.
       - name: tracknow_user_id
         description: TrackNow internal user id. Carried for audit only.
       - name: has_click_id
@@ -152,11 +161,14 @@ models:
       - name: affiliate_session_id
         description: >-
           TrackNow-side session id, carried for audit only. Never used as a
-          join key to PostHog.
+          join key to PostHog in this sample (no documented bridge in the
+          delivered data); in production it is part of the TrackNow identity
+          contract.
       - name: tracknow_user_id
         description: >-
-          TrackNow internal user id, carried for audit only. Never used as a
-          PostHog key.
+          TrackNow internal user id, carried for audit only. Not used as a
+          PostHog key in this sample; a production bridge would require an
+          explicit identity contract.
       - name: has_click_id
         description: True when click_id is present.
       - name: has_affiliate_session_id

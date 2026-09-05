@@ -26,7 +26,7 @@ dbt intermediate  (attribution candidates -> deterministic attribution -> unmatc
 dbt marts  (fct_revenue_attribution, fct_commission_daily_local, mart_attribution_health)
         |
         v
-consumers  (EDA notebook, Streamlit walkthrough, BigQuery consumption query)
+consumers  (EDA notebook, Streamlit app, BigQuery consumption query)
 ```
 
 ## Requirements
@@ -238,41 +238,42 @@ walkthrough pages — see the reproducible-bootstrap section above.
 ### Pages and relations
 
 The walkthrough is organised into pages (`Overview`, `Attribution analysis`,
-`Methodology and limitations`, and the closing `What I'd do next`) that read
-only the published consumer relations — the three marts and the single
-diagnostic intermediate view:
+`Methodology and limitations`) that read only the published consumer
+relations — the three marts and the single diagnostic intermediate view:
 
-- the Overview page explains the assignment problem in prose, renders the
+- the Overview page explains the assignment problem in prose, separates the
+  two populations the exercise talks about — the reported production gap
+  (18% of TrackNow conversions in the last 30 days with no matching PostHog
+  session, an assignment premise) and the anonymised sample this app
+  executes on (100 TrackNow conversions, 200 PostHog sessions) — renders the
   real pipeline architecture as a diagram with one responsibility per layer,
   and confirms the read-only marts connection;
 - `marts.fct_revenue_attribution` for valid-conversion revenue, commission,
   match status, and UTM breakdowns;
 - `intermediate.int_unmatched_conversions` (a dbt diagnostic view, read for
   its pre-computed `unmatched_reason` column only — never joined) for the
-  "why conversions are not attributed" audit panel;
+  "what the provided sample can diagnose" audit panel;
 - `marts.mart_attribution_health` for daily/source attribution monitoring;
 - `marts.fct_commission_daily_local` for the clearly labelled local commission
   proxy;
-- the Methodology and limitations page states the deterministic attribution
-  rules in plain language (exact click-id matching, temporal window,
-  identifier priority, recency tie-break, and the matched / ambiguous /
-  unmatched outcomes), interprets the observed results with totals read live
-  from the health mart, the revenue mart, and the diagnostic reason view, and
-  lists the sample's limitations and the recommendations (each citing the
-  live loss cause it addresses). The warehouse-specific limitation figures —
-  the decided/valid conversion counts, the conversion-date span, and the
-  outside-window count — are read live from those same relations, never from
-  fixed delivered-sample totals, so a custom warehouse is not contradicted.
-- the closing `What I'd do next` page is a short, architecture-oriented
-  production-evolution outline (BigQuery as the managed warehouse with the
-  same dbt `raw -> staging -> intermediate -> marts` shape, dbt-bigquery as
-  the adapter, Cloud Storage as the landing zone, Cloud Run Jobs / Cloud
-  Build for execution and scheduling, Terraform for datasets/service
-  accounts/IAM/buckets, GitHub Actions for CI/CD, and Cloud Monitoring for
-  freshness/failure/match-rate/unmatched-reason observability). It is pure
-  prose: it reads no warehouse relation, renders no chart, and explicitly
-  states that none of that production infrastructure exists in this
-  repository — the delivered solution stays local and self-contained.
+- the Methodology and limitations page is organised in four parts: the
+  production attribution design (the intended identity flow from ad click to
+  TrackNow conversion, with the role of each identifier — `gclid`/`fbclid`,
+  `click_id`, `affiliate_session_id`, `distinct_id`, `session_id` — and the
+  two design constraints), the sample implementation (the deterministic
+  attribution rules in plain language — exact click-id matching, temporal
+  window, identifier priority, recency tie-break, and the matched /
+  ambiguous / unmatched outcomes — stated as a sample constraint, not the
+  production architecture), the investigation of the reported 18% gap (six
+  pseudo-BigQuery diagnostic queries and six hypotheses, each with a test
+  and a fix, plus the root-cause boundary statement), and the limitations
+  with recommendations. The observed-results interpretation reads totals
+  live from the health mart, the revenue mart, and the diagnostic reason
+  view; the warehouse-specific limitation figures — the decided/valid
+  conversion counts, the conversion-date span, and the outside-window count
+  — are read live from those same relations, never from fixed
+  delivered-sample totals, so a custom warehouse is not contradicted. The
+  reported 18% is never re-derived from any relation.
 
 The analysis page presents four sections: an attribution overview with match
 and unmatched rates (the decided/denied audit reconciliation reads
@@ -316,7 +317,7 @@ docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/attribution_health.sql  BigQuery mart consumption query
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
 streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
-streamlit/sections/                Walkthrough pages (overview, analysis, methodology, next_steps)
+streamlit/sections/                Walkthrough pages (overview, analysis, methodology)
 tests/                             pytest suites (ingestion, bootstrap, structure)
 warehouse/pfm.duckdb               Generated local warehouse (ignored)
 ```
