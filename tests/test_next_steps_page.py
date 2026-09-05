@@ -55,9 +55,12 @@ def test_next_steps_page_is_last_page_in_app_navigation() -> None:
     nav_block = app_source[nav_start:nav_end]
     assert "What I'd do next" in nav_block
     # The closing page sits in the Area 2 group, after the Area 1 pages and
-    # after the two Area 2 design pages.
+    # after the Area 2 investigation and design pages.
     assert nav_block.rindex("url_path=\"next-steps\"") > nav_block.rindex(
         "url_path=\"methodology\""
+    )
+    assert nav_block.rindex("url_path=\"next-steps\"") > nav_block.rindex(
+        "url_path=\"investigation-monitoring\""
     )
     assert nav_block.rindex("url_path=\"next-steps\"") > nav_block.rindex(
         "url_path=\"quickbooks-reconciliation\""

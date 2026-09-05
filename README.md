@@ -286,7 +286,7 @@ intermediate view:
 - `marts.mart_attribution_health` for daily/source attribution monitoring;
 - `marts.fct_commission_daily_local` for the clearly labelled local commission
   proxy;
-- the Methodology and limitations page is organised in four parts: the
+- the Methodology and limitations page is organised in three parts: the
   production attribution design (the intended identity flow from ad click to
   TrackNow conversion, with the role of each identifier — `gclid`/`fbclid`,
   `click_id`, `affiliate_session_id`, `distinct_id`, `session_id` — and the
@@ -294,10 +294,11 @@ intermediate view:
   attribution rules in plain language — exact click-id matching, temporal
   window, identifier priority, recency tie-break, and the matched /
   ambiguous / unmatched outcomes — stated as a sample constraint, not the
-  production architecture), the investigation of the reported 18% gap (six
-  pseudo-BigQuery diagnostic queries and six hypotheses, each with a test
-  and a fix, plus the root-cause boundary statement), and the limitations
-  with recommendations (each citing the live loss cause it addresses). The
+  production architecture), and the limitations with recommendations (each
+  citing the live loss cause it addresses). The investigation of the
+  reported 18% gap (six pseudo-BigQuery diagnostic queries and six
+  hypotheses, each with a test and a fix, plus the root-cause boundary
+  statement) lives on the Area 2 `Investigation & monitoring` page. The
   observed-results interpretation reads totals live from the health mart,
   the revenue mart, and the diagnostic reason view; the warehouse-specific
   limitation figures — the decided/valid conversion counts, the
@@ -319,6 +320,12 @@ intermediate view:
 **Area 2 — Investigation, integration & monitoring** holds the pure-prose
 design pages; they read no warehouse relation:
 
+- the `Investigation & monitoring` page carries the area's investigation
+  narrative: the reported 18% gap (the assignment premise, never re-derived
+  from the sample), the six pseudo-BigQuery diagnostic queries that would run
+  against production, and the six hypotheses with a test and a fix each,
+  closing with the root-cause boundary statement — plus a map of the six
+  area elements pointing to the companion design pages;
 - the `Data quality monitoring` page presents the five data quality checks
   for the commission pipeline — what each validates, its threshold, its
   P1/P2/P3 severity, its implementation, and the on-call notification — plus
@@ -458,7 +465,7 @@ docs/quickbooks_reconciliation_design.md  Area 2 design: QuickBooks -> Airbyte -
 docs/commission_monitoring_design.md  Area 2 design: five data quality checks, thresholds, P1/P2/P3 severities, on-call routing (design only)
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
 streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
-streamlit/sections/                Walkthrough pages (overview, analysis, methodology, monitoring_design, quickbooks_reconciliation, next_steps)
+streamlit/sections/                Walkthrough pages (overview, analysis, methodology, investigation, monitoring_design, quickbooks_reconciliation, next_steps)
 tests/                             pytest suites (ingestion, bootstrap, structure)
 tests/sql/                         Static checks on the BigQuery SQL assets
 warehouse/pfm.duckdb               Generated local warehouse (ignored)
