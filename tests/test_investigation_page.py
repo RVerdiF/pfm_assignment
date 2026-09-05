@@ -11,6 +11,7 @@ the area's companion pages), and keeps the design-only boundary.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
@@ -105,10 +106,34 @@ def test_investigation_query_5_respects_the_documented_tracknow_grain() -> None:
     # The lag is measured against the live PostHog session through the
     # bridge (same live-session semantics as Queries 1-4), not against an
     # undocumented bridge timestamp column.
-    assert "date_diff(ph.session_start_at" in lowered
+    assert "date_diff(ph.session_start_at" not in lowered
+    assert "cast(t.created_date as timestamp)" not in lowered
     assert "bridge.session_start_at" not in lowered
     assert "attribution_generated" not in lowered
     assert "left join posthog.sessions ph" in lowered
+
+    # BigQuery date/timestamp function choice and end-start direction:
+    # the executable day-grain lag is DATE_DIFF over DATE values with the
+    # conversion date as the end and the session start as the start (a
+    # conversion after its session is positive); the hypothetical
+    # hour-grain lag is TIMESTAMP_DIFF over timestamps with the same
+    # direction. Timestamps must never be passed to date_diff.
+    day_diffs = re.findall(
+        r"date_diff\(([^,()]+(?:\([^)]*\))?)\s*,"
+        r"\s*([^,()]+(?:\([^)]*\))?)\s*,\s*day\s*\)",
+        lowered,
+    )
+    assert day_diffs == [
+        ("t.created_date", "date(ph.session_start_at)")
+    ], day_diffs
+    hour_diffs = re.findall(
+        r"timestamp_diff\(([^,]+),\s*([^,]+),\s*hour\s*\)", lowered
+    )
+    assert hour_diffs == [("t.conversion_at", "ph.session_start_at")], (
+        hour_diffs
+    )
+    assert "date_diff(" in lowered  # executable part stays at date grain
+    assert "date_diff(t.conversion_at" not in lowered  # no DATE/TIMESTAMP mix
 
 
 def test_investigation_page_renders_hypotheses_with_tests_and_fixes() -> None:
