@@ -107,19 +107,26 @@ DECISION_STATES = (
 # how attribution SHOULD work when the systems are under our control — not
 # what the anonymised sample can demonstrate (ADR 3 / ADR 11).
 PRODUCTION_IDENTITY_FLOW = """\
-Google / Meta ad click
-        |
-gclid / fbclid captured on the landing page
-        |
-PostHog session + distinct_id  (ad-click identifiers persisted with the session)
-        |
-identifier persistence / identity bridge  (first-party state keyed by the user/browser)
-        |
-affiliate outbound click  (identifiers propagated onto the redirect)
-        |
-TrackNow click_id / affiliate_session_id  (the click contract closes the loop)
-        |
-TrackNow conversion  (attributable back to the original ad click)
+1. Capture ad-click identifier
+   Google / Meta ad click → capture `gclid` / `fbclid` on the landing page
+
+2. Persist with PostHog identity
+   `gclid` / `fbclid` → store in first-party attribution bridge keyed by
+   PostHog `distinct_id` + `session_id`
+
+3. Generate / persist attribution identifier
+   Attribution bridge → generate a persistent `attribution_click_id`
+   (first-party, survives session boundaries)
+
+4. Propagate onto affiliate redirect
+   `attribution_click_id` → pass as TrackNow `click_id` on the affiliate URL
+
+5. TrackNow closes the loop
+   TrackNow `click_id` → returns the same `click_id` on the conversion
+
+6. Conversion resolves the bridge
+   `conversion.click_id` → resolves the attribution bridge → resolves the
+   PostHog session / `distinct_id`
 """
 
 # The role each identifier plays in the production design. The sample cannot
@@ -148,24 +155,82 @@ PRODUCTION_IDENTIFIER_ROLES = (
         "without a documented contract between the systems.",
     ),
     (
+        "`attribution_click_id`",
+        "The first-party identifier generated from the bridge. Passed to "
+        "TrackNow as the affiliate `click_id`; the deterministic key that "
+        "links a conversion back to the PostHog identity.",
+    ),
+    (
         "`click_id`",
         "The TrackNow outbound-click identifier carried by the conversion — "
-        "the deterministic key that links a conversion to its click. The one "
-        "join the executable sample can prove.",
+        "the key that closes the loop. Must equal the `attribution_click_id` "
+        "passed on the affiliate URL.",
     ),
     (
         "`affiliate_session_id`",
         "Assigned by TrackNow when the affiliate link is clicked; one of the "
         "keys to attribution in the TrackNow contract. The sample cannot "
         "relate it to a PostHog session, which is a property of the "
-        "anonymised file — production design must document what it references "
-        "rather than discard it.",
+        "provided anonymised file — production design must document what it "
+        "references rather than discard it.",
+    ),
+    (
+        "`utm_content`",
+        "Not used as a conversion→session key. After the session is "
+        "identified, it enriches attribution with Meta ad/creative data "
+        "(e.g. ad_id) for reporting.",
+    ),
+)
+
+# Edge cases that break the match and how the data model handles each one.
+# These are distinct from the investigation hypotheses (which explain the
+# reported 18% gap); these are the structural boundaries the production
+# data model must accommodate.
+EDGE_CASES = (
+    (
+        "Missing click_id on conversion",
+        "Conversion arrives with no click identifier at all.",
+        "unmatched / missing_click_id — cannot be attributed under exact "
+        "matching; surfaced for tracking-layer repair.",
+    ),
+    (
+        "Cross-session conversion",
+        "User enters via paid traffic but converts in a later session; the "
+        "converting session carries no click identifier.",
+        "Persistent identity bridge keyed by `distinct_id` keeps the "
+        "attribution state across sessions for a defined lookback window.",
+    ),
+    (
+        "Multiple paid clicks before conversion",
+        "User clicks both a Google and a Meta ad (or multiple ads) before "
+        "converting.",
+        "Deterministic attribution policy (typed-identifier priority + "
+        "recency tie-break) chooses exactly one session; no ambiguous "
+        "multi-channel credit.",
+    ),
+    (
+        "Cookie reset / cross-device / incognito",
+        "PostHog `distinct_id` changes before purchase (new device, cleared "
+        "cookies, incognito); the converting identity never saw the ad click.",
+        "Anonymous-to-known identity map stitched on login/account "
+        "identifier; pre-login sessions survive the identity transition.",
+    ),
+    (
+        "Late-arriving data",
+        "The two systems land data at different speeds; a conversion is "
+        "counted unmatched until the matching PostHog session arrives.",
+        "Incremental lookback reprocessing over a defined window; records "
+        "flip from unmatched to matched when the session lands.",
     ),
 )
 
 # Diagnostic queries for the reported production gap. Sketches in pseudo-
-# BigQuery SQL: the real production tables were not delivered, so these are
-# the documented investigation, not executed code.
+# BigQuery SQL over the KNOWN production contract (TrackNow conversions,
+# PostHog sessions, and the attribution bridge): the real production tables
+# were not delivered, so these are the documented investigation, not
+# executed code. No column is invented — every field either exists in the
+# documented staging schema or is explicitly named as a hypothetical bridge
+# column with its role stated.
 INVESTIGATION_QUERIES = (
     (
         "Query 1 — Daily baseline of the gap",
@@ -173,14 +238,15 @@ INVESTIGATION_QUERIES = (
         "unmatched share before any breakdown is trusted.",
         """\
 -- Trend and temporal concentration of the reported gap.
+-- Joins the production attribution bridge to PostHog sessions.
 select
   conversion_date,
   count(*)                                                      as conversions,
-  countif(ph.session_id is null)                                as unmatched,
-  countif(ph.session_id is null) / count(*)                     as unmatched_rate
+  countif(bridge.session_id is null)                            as unmatched,
+  countif(bridge.session_id is null) / count(*)                 as unmatched_rate
 from tracknow.conversions t
-left join posthog.sessions ph
-  on t.attributed_session_id = ph.session_id  -- the production attribution join
+left join attribution.bridge bridge
+  on bridge.click_id = t.click_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
 group by conversion_date
 order by conversion_date;""",
@@ -188,20 +254,20 @@ order by conversion_date;""",
     (
         "Query 2 — Identifier coverage",
         "Measure how often each attribution key is even present: missing "
-        "`click_id`, missing `affiliate_session_id`, presence of "
-        "`gclid`/`fbclid`, and conversions that carry an identifier yet "
-        "still fail to match a PostHog session.",
+        "`click_id`, missing `affiliate_session_id`, presence of an "
+        "attribution bridge record, and conversions that carry an identifier "
+        "yet still fail to resolve a PostHog session.",
         """\
 select
   count(*)                                                        as conversions,
   countif(t.click_id is null)                                     as missing_click_id,
   countif(t.affiliate_session_id is null)                         as missing_affiliate_session_id,
-  countif(coalesce(t.gclid, t.fbclid) is not null)                as with_paid_click_id,
-  countif(coalesce(t.gclid, t.fbclid) is not null
-          and ph.session_id is null)                              as identifier_but_no_posthog_match
+  countif(bridge.click_id is not null)                            as with_bridge_record,
+  countif(bridge.click_id is not null
+          and bridge.session_id is null)                          as bridge_but_no_session
 from tracknow.conversions t
-left join posthog.sessions ph
-  on t.attributed_session_id = ph.session_id
+left join attribution.bridge bridge
+  on bridge.click_id = t.click_id
 where t.created_date >= date_sub(current_date(), interval 30 day);""",
     ),
     (
@@ -211,19 +277,15 @@ where t.created_date >= date_sub(current_date(), interval 30 day);""",
         "platform's click-identifier plumbing.",
         """\
 select
-  case
-    when t.gclid is not null then 'google'
-    when t.fbclid is not null then 'meta'
-    else 'other_or_unknown'
-  end                                      as channel,
+  bridge.acquired_channel,   -- 'google' | 'meta' | 'other', from the bridge
   count(*)                                 as conversions,
-  countif(ph.session_id is null)           as unmatched,
-  countif(ph.session_id is null) / count(*) as unmatched_rate
+  countif(bridge.session_id is null)       as unmatched,
+  countif(bridge.session_id is null) / count(*) as unmatched_rate
 from tracknow.conversions t
-left join posthog.sessions ph
-  on t.attributed_session_id = ph.session_id
+left join attribution.bridge bridge
+  on bridge.click_id = t.click_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-group by channel
+group by bridge.acquired_channel
 order by unmatched desc;""",
     ),
     (
@@ -232,30 +294,24 @@ order by unmatched desc;""",
         "Safari/iOS, mobile, specific regions, consent-banner outcomes, and "
         "browser privacy features that suppress client-side collection. The "
         "PostHog session is missing by definition on the unmatched rows, so "
-        "every dimension is sourced from the TrackNow outbound-click record "
-        "(the click contract, as in query 6) — never from the PostHog "
-        "session row, and without inventing `affiliate_session_id` = "
-        "`PostHog.session_id`.",
+        "every dimension is sourced from the TrackNow conversion and the "
+        "attribution bridge record — never from the PostHog session row.",
         """\
 -- The unmatched cohort has no PostHog session by definition, so the
--- breakdown dimensions come from the outbound-click record (the click
--- contract), never from `ph.*`.
+-- breakdown dimensions come from the conversion + the bridge record, never
+-- from ph.*.
 select
-  k.device_type,
-  k.browser,
-  k.os,
-  k.country_code,
-  k.consent_state,
+  t.device_type,
+  t.browser,
+  t.os,
+  t.country_code,
+  t.consent_state,
   count(*) as unmatched_conversions
 from tracknow.conversions t
-join tracknow.outbound_clicks k
-  on k.click_ref = t.conversion_click_ref
+left join attribution.bridge bridge
+  on bridge.click_id = t.click_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-  and not exists (          -- the unmatched cohort itself
-    select 1
-    from posthog.sessions ph
-    where ph.session_id = t.attributed_session_id
-  )
+  and bridge.session_id is null     -- the unmatched cohort itself
 group by 1, 2, 3, 4, 5
 order by unmatched_conversions desc;""",
     ),
@@ -268,31 +324,29 @@ order by unmatched_conversions desc;""",
         """\
 select
   t.conversion_id,
-  date_diff(t.created_at, fp.session_start_at, hour)  as paid_session_lag_hours,
-  date_diff(t.created_at, ac.clicked_at, hour)        as affiliate_click_lag_hours
+  date_diff(t.created_at, bridge.session_start_at, hour)  as session_lag_hours,
+  date_diff(t.created_at, bridge.attribution_generated_at, hour) as bridge_lag_hours
 from tracknow.conversions t
-left join posthog.sessions fp      -- first paid session per distinct_id
-  on fp.distinct_id = t.distinct_id and fp.is_paid
-left join affiliate.outbound_clicks ac
-  on ac.click_id = t.click_id
+join attribution.bridge bridge
+  on bridge.click_id = t.click_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-order by paid_session_lag_hours desc;""",
+order by session_lag_hours desc;""",
     ),
     (
-        "Query 6 — TrackNow propagation audit",
-        "Compare the identifier values persisted at the outbound affiliate "
-        "click with the values that reappear on the conversion, to catch "
-        "TrackNow-side propagation loss inside its own contract.",
+        "Query 6 — Attribution bridge propagation audit",
+        "Compare the identifier values captured at the affiliate click with "
+        "the values that reappear on the conversion, to catch propagation "
+        "loss inside the attribution bridge.",
         """\
 select
-  c.click_id is distinct from k.click_id                   as click_id_changed,
-  c.affiliate_session_id is distinct from k.affiliate_session_id
-                                                           as session_id_changed,
-  count(*)                                                 as conversions
-from tracknow.conversions c
-join tracknow.outbound_clicks k
-  on c.conversion_click_ref = k.click_ref
-where c.created_date >= date_sub(current_date(), interval 30 day)
+  t.click_id is distinct from bridge.click_id                    as click_id_changed,
+  t.affiliate_session_id is distinct from bridge.affiliate_session_id
+                                                               as session_id_changed,
+  count(*)                                                     as conversions
+from tracknow.conversions t
+join attribution.bridge bridge
+  on bridge.click_id = t.click_id
+where t.created_date >= date_sub(current_date(), interval 30 day)
 group by 1, 2
 order by conversions desc;""",
     ),
@@ -303,7 +357,7 @@ order by conversions desc;""",
 # be proven by the delivered sample.
 INVESTIGATION_HYPOTHESES = (
     (
-        "Hypothesis 1 — Identifier lost before TrackNow",
+        "Hypothesis 1 — Identifier lost before the bridge",
         "`gclid` / `fbclid` exists on the landing session but is never "
         "persisted or propagated onto the affiliate link, so TrackNow "
         "receives a click it cannot tie to PostHog.",
@@ -372,10 +426,10 @@ INVESTIGATION_HYPOTHESES = (
 # The root-cause boundary, stated verbatim in the walkthrough: the sample
 # cannot prove which production mechanism drives the reported gap.
 ROOT_CAUSE_STATEMENT = (
-    "The exact production root cause cannot be proven from the delivered "
-    "anonymised sample. The investigation above is designed to isolate "
-    "whether the gap comes from identifier capture, propagation, identity "
-    "persistence, client-side collection, or ingestion latency."
+    "The provided anonymised sample does not contain a deterministic "
+    "cross-system identity overlap. The investigation above is designed to "
+    "isolate whether the gap comes from identifier capture, propagation, "
+    "identity persistence, client-side collection, or ingestion latency."
 )
 
 
@@ -461,7 +515,7 @@ def _build_result_interpretations(
                 "unmatched/ambiguous, so the revenue mart "
                 f"({valid:,} valid conversions, £{commission:,.2f} of "
                 "commission) carries no channel signal at all. This is a "
-                "property of the delivered sample, not a pipeline failure: "
+                "property of the provided sample, not a pipeline failure: "
                 "the attribution engine is exact-only, and no TrackNow click "
                 "id equals a PostHog identifier value inside the sample.",
             )
@@ -636,12 +690,22 @@ def _production_design_section() -> None:
         "Two design constraints follow. First, `gclid` / `fbclid` are "
         "captured at the landing and must be persisted together with the "
         "PostHog `distinct_id` / session, then propagated onto the affiliate "
-        "outbound click, so `click_id` can close the loop at the conversion. "
-        "Second, `affiliate_session_id` is treated as part of the TrackNow "
-        "contract — a key to attribution — without assuming that it equals "
-        "`PostHog.session_id`; whatever it references must be documented by "
-        "the integration, not guessed after the fact."
+        "outbound click, so `attribution_click_id` can close the loop at the "
+        "conversion. Second, `affiliate_session_id` is treated as part of the "
+        "TrackNow contract — a key to attribution — without assuming that it "
+        "equals `PostHog.session_id`; whatever it references must be documented "
+        "by the integration, not guessed after the fact. `utm_content` is "
+        "preserved as Meta ad/creative enrichment (e.g. ad_id) for reporting "
+        "after the session is identified, not as a conversion→session key."
     )
+    st.markdown("##### Edge cases and data-model handling")
+    st.write(
+        "The following structural boundaries apply regardless of which "
+        "production mechanism drives the reported gap. Each one names the "
+        "edge case, when it occurs, and how the data model resolves it."
+    )
+    for case, when, handling in EDGE_CASES:
+        st.markdown(f"- **{case}.** *When:* {when}. *Handling:* {handling}")
 
 
 def _method_section() -> None:
@@ -694,12 +758,15 @@ def _investigation_section() -> None:
         "conversions in the last 30 days have no matching PostHog session. "
         "The real production tables were not delivered, so nothing below is "
         "executed here — these are the queries and hypotheses that would run "
-        "against production, in the order I would trust them. The anonymised "
-        "sample cannot confirm or refute any of them."
+        "against production, in the order I would trust them. The provided "
+        "anonymised sample cannot confirm or refute any of them."
     )
     st.caption(
-        "Each sketch is pseudo-BigQuery SQL over illustrative table names; "
-        "the join shape matters, not the schema details."
+        "Each sketch is pseudo-BigQuery SQL over the documented production "
+        "contract (TrackNow conversions, PostHog sessions, and the attribution "
+        "bridge): no column is invented — every field either exists in the "
+        "documented staging schema or is explicitly named as a hypothetical "
+        "bridge column with its role stated."
     )
 
     st.markdown("##### Diagnostic queries")
