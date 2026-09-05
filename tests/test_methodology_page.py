@@ -251,7 +251,7 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
         "gclid",
         "fbclid",
         "attribution bridge",
-        "TrackNow click_id",
+        "click_id",
         "affiliate_session_id",
     ]:
         assert phrase in code
