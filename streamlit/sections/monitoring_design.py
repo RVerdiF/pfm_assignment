@@ -46,7 +46,8 @@ CHECKS = (
         "primary conversion identifier present, statuses within the known set.",
         "Duplicate tracknow_order_id count; null conversion IDs; statuses "
         "outside the accepted set.",
-        "Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert.",
+        "Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert. "
+        "Any invalid status > 0 → alert.",
         "P1 — duplicates can double-count revenue and commission.",
         "dbt tests: unique and not_null on tracknow_order_id, "
         "accepted_values on status, plus a singular test for the business "

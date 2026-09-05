@@ -69,6 +69,15 @@ def test_monitoring_page_check_covers_all_required_fields() -> None:
     assert all(count == 5 for count in label_counts), label_counts
 
 
+def test_monitoring_page_check2_thresholds_cover_all_metrics() -> None:
+    at = _render()
+    body = _body(at)
+    # Check 2 metric has three parts → threshold must alert on each.
+    assert "duplicate ID > 0" in body
+    assert "null conversion ID > 0" in body
+    assert "invalid status > 0" in body
+
+
 def test_monitoring_page_states_thresholds_and_severities() -> None:
     at = _render()
     body = _body(at)
