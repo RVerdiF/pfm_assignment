@@ -55,11 +55,14 @@ def test_quickbooks_page_is_registered_in_app_navigation() -> None:
     app_source = APP.read_text()
     assert "quickbooks_reconciliation" in app_source
     nav_block = app_source[
-        app_source.index("pages = [") : app_source.index(
+        app_source.index("pages = {") : app_source.index(
             "navigation = st.navigation"
         )
     ]
     assert "QuickBooks reconciliation" in nav_block
+    # The design pages live in the Area 2 navigation group.
+    area2 = nav_block[nav_block.index("Area 2") :]
+    assert "QuickBooks reconciliation" in area2
 
 
 def test_quickbooks_page_shows_full_architecture_with_grains() -> None:

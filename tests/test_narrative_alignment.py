@@ -174,3 +174,64 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     # The prose tells the reader where the dimensions come from.
     assert "TrackNow" in purpose
     assert "documented" in purpose.lower() or "firm" in purpose.lower()
+
+
+def test_monitoring_pages_keep_the_18_percent_as_reported_gap() -> None:
+    """The monitoring design treats 18% as the reported gap, not an SLA.
+
+    The card forbids hardcoding the reported production gap as a definitive
+    threshold: the check baseline must come from recent history, and the
+    thresholds must be configuration.
+    """
+    monitoring = _read("streamlit", "sections", "monitoring_design.py")
+    doc = _read("docs", "commission_monitoring_design.md")
+    for source in (monitoring, doc):
+        # Normalise markdown emphasis so bold prose does not dodge the guard.
+        source = source.replace("**", "")
+        # The figure may only be cited as the reported/observed production
+        # gap, never as a fixed production truth or an SLA anchor: wherever
+        # it appears, the not-an-SLA disclaimer appears in the same source.
+        if "18%" in source:
+            assert "not a hardcoded SLA" in source
+            assert "reported" in source or "observed" in source
+        assert "baseline" in source
+
+
+def test_sample_100_percent_unmatched_stays_a_sample_observation() -> None:
+    """The sample's 0% match rate must never be stated as production truth."""
+    for name in ["overview.py", "analysis.py", "methodology.py", "monitoring_design.py"]:
+        source = _read("streamlit", "sections", name)
+        assert "production unmatched rate = 100%" not in source.lower()
+        assert "production unmatched rate is 100%" not in source.lower()
+        assert "100% unmatched in production" not in source.lower()
+    # The overview states the sample outcome as a property of the sample file.
+    overview = _read("streamlit", "sections", "overview.py")
+    assert "a factual property of this file" in overview
+
+
+def test_monitoring_pages_are_design_only() -> None:
+    """The monitoring/reconciliation pages never claim implemented infrastructure."""
+    for name in ["monitoring_design.py", "quickbooks_reconciliation.py", "next_steps.py"]:
+        source = _read("streamlit", "sections", name)
+        assert "implemented in this repository" in source
+    # And the monitoring design doc states the same boundary up front.
+    doc = _read("docs", "commission_monitoring_design.md")
+    assert "design only" in doc.lower()
+    assert "Nothing in this document is provisioned" in doc
+
+
+def test_methodology_edge_cases_cover_the_assignment_minimum() -> None:
+    """At least four attribution edge cases, each with failure and handling."""
+    from sections.methodology import EDGE_CASES
+
+    assert len(EDGE_CASES) >= 4
+    for case, when, handling in EDGE_CASES:
+        assert case and when and handling
+    names = {case for case, _, _ in EDGE_CASES}
+    # The card's required set.
+    assert "Missing click_id on conversion" in names
+    assert "Cross-session conversion" in names
+    assert "Cookie reset / cross-device / incognito" in names
+    assert "Multiple paid clicks before conversion" in names
+    assert "Redirect strips parameters" in names
+    assert "Late-arriving data" in names

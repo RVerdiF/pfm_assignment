@@ -47,16 +47,23 @@ def test_next_steps_page_renders() -> None:
 
 
 def test_next_steps_page_is_last_page_in_app_navigation() -> None:
-    """The new section must close the walkthrough navigation."""
+    """The outline page still closes the walkthrough navigation."""
     app_source = APP.read_text()
     assert "next_steps" in app_source
-    # Ordering: the four st.Page registrations end with the next-steps page.
-    nav_start = app_source.index("pages = [")
+    nav_start = app_source.index("pages = {")
     nav_end = app_source.index("navigation = st.navigation")
     nav_block = app_source[nav_start:nav_end]
     assert "What I'd do next" in nav_block
+    # The closing page sits in the Area 2 group, after the Area 1 pages and
+    # after the two Area 2 design pages.
     assert nav_block.rindex("url_path=\"next-steps\"") > nav_block.rindex(
         "url_path=\"methodology\""
+    )
+    assert nav_block.rindex("url_path=\"next-steps\"") > nav_block.rindex(
+        "url_path=\"quickbooks-reconciliation\""
+    )
+    assert nav_block.rindex("url_path=\"next-steps\"") > nav_block.rindex(
+        "url_path=\"monitoring-design\""
     )
 
 
