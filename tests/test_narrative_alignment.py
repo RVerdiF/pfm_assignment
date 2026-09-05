@@ -143,14 +143,14 @@ def test_reported_gap_callout_renders_with_sample_rate_from_marts() -> None:
     )
 
 
-def test_investigation_query_4_never_sources_dimensions_from_the_missing_session() -> None:
-    """Regression for review round 1: Query 4 must be internally consistent.
+def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
+    """Query 4 must use TrackNow's documented fields, not invented telemetry.
 
     The unmatched cohort has no PostHog session by definition, so the query
-    that profiles it by device/browser/country must not take any dimension
-    from the PostHog row that is NULL for exactly that population — and must
-    not invent an identity bridge (affiliate_session_id = PostHog.session_id)
-    to obtain one.
+    that profiles it must use only TrackNow's own documented fields (firm_id,
+    trading_platform, first_order) — never device/browser/os/country/consent
+    (which TrackNow's staging schema does not carry), and never an identity
+    bridge (affiliate_session_id = PostHog.session_id).
     """
     from sections.methodology import INVESTIGATION_QUERIES
 
@@ -159,22 +159,17 @@ def test_investigation_query_4_never_sources_dimensions_from_the_missing_session
     )
     lowered = sketch.lower()
 
-    # No dimension may be read from the PostHog row.
-    assert "ph.device_type" not in lowered
-    assert "ph.browser" not in lowered
-    assert "ph.os" not in lowered
-    assert "ph.country" not in lowered
+    # No invented telemetry columns (TrackNow staging does not carry these).
+    for invented in ["device_type", "browser", "os", "country_code", "consent_state"]:
+        assert invented not in lowered, f"invented column {invented!r} in Query 4"
     # No identity bridge is invented to source the dimensions.
     assert "affiliate_session_id = ph.session_id" not in lowered
     assert "on ph.session_id = t.affiliate_session_id" not in lowered
     # The sketch actually isolates the unmatched cohort.
-    assert "attributed_session_id" in lowered
-    # Dimensions come from the pre-match outbound-click record (click
-    # contract), matching the stated purpose of the query.
-    assert "outbound_clicks" in lowered
-    for dimension in ["device_type", "browser", "country"]:
+    assert "ph.session_id is null" in lowered
+    # Dimensions come from TrackNow's documented fields.
+    for dimension in ["firm_id", "trading_platform", "first_order"]:
         assert dimension in lowered
-    # The prose tells the reader where the dimensions come from and names the
-    # constraint.
-    assert "outbound-click" in purpose.lower()
-    assert "missing by definition" in purpose.lower()
+    # The prose tells the reader where the dimensions come from.
+    assert "TrackNow" in purpose
+    assert "documented" in purpose.lower() or "firm" in purpose.lower()

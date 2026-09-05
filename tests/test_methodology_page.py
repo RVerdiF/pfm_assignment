@@ -266,9 +266,9 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
         "Query 1 — Daily baseline of the gap",
         "Query 2 — Identifier coverage",
         "Query 3 — Gap by channel",
-        "Query 4 — Gap by device / browser / country",
+        "Query 4 — Gap by TrackNow-side dimensions",
         "Query 5 — Conversion lag (cross-session loss)",
-        "Query 6 — TrackNow propagation audit",
+        "Query 6 — Attribution bridge propagation audit",
     ]:
         assert phrase in body
 

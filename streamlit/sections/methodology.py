@@ -398,8 +398,8 @@ INVESTIGATION_HYPOTHESES = (
         "The PostHog `distinct_id` changes before purchase (new device, "
         "cleared cookies, incognito), so the converting identity never saw "
         "the ad click.",
-        "**Test:** breakdown of unmatched conversions by the browser/device "
-        "recorded at the outbound click (query 4), plus identity-reset "
+        "**Test:** unmatched conversions broken down by firm/trading "
+        "platform/first-order status (query 4), plus identity-reset "
         "analysis over the identities that do resolve.",
         "**Fix:** identity stitching on login/account identifier, keeping an "
         "anonymous-to-known mapping so pre-login sessions survive.",
@@ -408,8 +408,9 @@ INVESTIGATION_HYPOTHESES = (
         "Hypothesis 4 — Redirect stripping / affiliate integration issue",
         "An affiliate network or redirect template strips query parameters, "
         "so the click identifier never reaches TrackNow.",
-        "**Test:** unmatched rate by firm / destination / campaign to expose "
-        "specific partners losing parameters (queries 3 and 6).",
+        "**Test:** unmatched rate by firm / trading platform (query 4) "
+        "and by acquired channel (query 3) to expose specific partners "
+        "losing parameters (query 6).",
         "**Fix:** repair the redirect template and add automated tracking "
         "QA that asserts parameter survival end to end.",
     ),
@@ -418,10 +419,10 @@ INVESTIGATION_HYPOTHESES = (
         "The TrackNow conversion happens, but the PostHog session is never "
         "recorded client-side (consent not granted, blocker, script "
         "failure).",
-        "**Test:** unmatched conversions broken down by the browser/country/"
-        "consent state recorded at the outbound click (query 4), and a "
-        "comparison of server-side TrackNow volume against client-side "
-        "analytics volume over time (query 1).",
+        "**Test:** unmatched conversions broken down by firm/trading "
+        "platform/first-order status (query 4), plus a comparison of "
+        "server-side TrackNow volume against client-side analytics volume "
+        "over time (query 1).",
         "**Fix:** capture the critical identifiers server-side or route "
         "analytics through a first-party tracking endpoint.",
     ),
