@@ -180,6 +180,57 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     assert "documented" in purpose.lower() or "firm" in purpose.lower()
 
 
+def test_investigation_query_3_counts_dangling_bridge_sessions_as_unmatched() -> None:
+    """Query 3's unmatched definition matches Queries 1/4: no PostHog session.
+
+    A bridge row can carry a session_id that no longer exists in PostHog;
+    counting those as matched (countif(bridge.session_id is null)) would
+    contradict the reported-gap premise. Query 3 must therefore resolve the
+    PostHog session through the bridge and count rows without a live
+    PostHog session (ph.session_id is null) as unmatched.
+    """
+    from sections.investigation import INVESTIGATION_QUERIES
+
+    title, purpose, sketch = next(
+        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 3"))
+    )
+    lowered = sketch.lower()
+
+    # PostHog is joined through the bridge, so a dangling bridge session_id
+    # fails the match just like a missing bridge record.
+    assert "left join posthog.sessions ph" in lowered
+    assert "on ph.session_id = bridge.session_id" in lowered
+    # The unmatched count/rate use the live-session definition.
+    assert "countif(ph.session_id is null)" in lowered
+    # The wrong semantic (bridge-presence mistaken for a PostHog match).
+    assert "countif(bridge.session_id is null)" not in lowered
+    # It is still the by-channel breakdown.
+    assert "bridge.acquired_channel" in lowered
+    assert "group by bridge.acquired_channel" in lowered
+
+
+def test_readme_scope_boundary_distinguishes_premise_from_sample() -> None:
+    """README's scope note must not deny showing the 18% production premise.
+
+    The README and Streamlit deliberately present the assignment-provided
+    18% reported production gap, so the "not implemented" boundary must say
+    that no production data is delivered/queried and that executable metrics
+    come from the sample — not that every shown number is sample-derived.
+    """
+    readme = _read("README.md")
+    # The contradictory universal claim must not return.
+    assert "every number shown comes from the anonymised sample" not in readme
+    # The 18% premise appears in the README (reported production gap).
+    assert "18%" in readme
+    assert "assignment premise" in readme
+    # The corrected scope boundary distinguishes the two populations.
+    assert "assignment-provided reported premise" in readme
+    assert "not a number computed here" in readme
+    # The Streamlit side keeps the premise framing (18% shown on purpose).
+    investigation = _read("streamlit", "sections", "investigation.py")
+    assert "assignment premise" in investigation
+
+
 def test_monitoring_pages_keep_the_18_percent_as_reported_gap() -> None:
     """The monitoring design treats 18% as the reported gap, not an SLA.
 
