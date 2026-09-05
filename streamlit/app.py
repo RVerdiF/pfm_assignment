@@ -37,15 +37,19 @@ STREAMLIT_DIR = Path(__file__).resolve().parent
 if str(STREAMLIT_DIR) not in sys.path:
     sys.path.insert(0, str(STREAMLIT_DIR))
 
-from sections import (  # noqa: E402
-    analysis,
-    investigation,
-    methodology,
-    monitoring_design,
-    next_steps,
-    overview,
-    quickbooks_reconciliation,
-)
+try:
+    from sections import (  # noqa: E402
+        analysis,
+        investigation,
+        methodology,
+        monitoring_design,
+        next_steps,
+        overview,
+        quickbooks_reconciliation,
+    )
+except KeyError:
+    # Handle Streamlit LocalSourcesWatcher hot-reload race condition in Python 3.12
+    st.rerun()
 
 
 def main() -> None:
@@ -102,4 +106,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyError:
+        st.rerun()
