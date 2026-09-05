@@ -315,6 +315,7 @@ requirements.txt                   Pinned runtime deps for the Community Cloud d
 pyproject.toml                     Project manifest for local development (PEP 621)
 docs/decisions.md                  Closed project decisions (ADR-lite)
 sql/bigquery/attribution_health.sql  BigQuery mart consumption query
+docs/quickbooks_reconciliation_design.md  Area 2 design: QuickBooks -> Airbyte -> BigQuery -> dbt reconciliation -> alerts (design only)
 streamlit/app.py                   Walkthrough entrypoint (navigation + bootstrap)
 streamlit/warehouse_bootstrap.py   Read-only connection + reproducible bootstrap
 streamlit/sections/                Walkthrough pages (overview, analysis, methodology)
@@ -331,3 +332,8 @@ warehouse/pfm.duckdb               Generated local warehouse (ignored)
 - `docs/decisions.md` — closed decisions: Polars ingestion, preservation of
   fully null rows, exact click-ID matching, local DuckDB, mandatory
   review -> PR -> manual merge flow, English-only code.
+- `docs/quickbooks_reconciliation_design.md` — Area 2 design answer: the
+  QuickBooks -> Airbyte -> BigQuery raw -> dbt staging -> reconciliation ->
+  alert pipeline, with per-layer grains, the
+  `dim_firm_accounting_mapping` bridge, the reconciliation status taxonomy,
+  and DQ checks per layer.
