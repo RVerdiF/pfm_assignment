@@ -1,4 +1,4 @@
-Evidence — Card 3 (t_485f334d) — Narrative, architecture and walkthrough completion
+Evidence - Card 3 (t_485f334d) - Narrative, architecture and walkthrough completion
 Branch: wt/t_485f334d  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main 3a83509 (Card 2 merged via PR #18)
 Commits:
@@ -7,7 +7,7 @@ Commits:
   f3b97c8 docs(streamlit): pin Card 3 commit SHA in evidence file
   296035e fix(streamlit): derive methodology narrative numbers live (rework)
 
-Rework round (review gate — data/reporting correctness)
+Rework round (review gate - data/reporting correctness)
 -------------------------------------------------------
 Reviewer finding: streamlit/sections/methodology.py hard-coded every reported
 result (100/0/100, 92, £1,001.70, the 13/40/47 loss breakdown) in
@@ -20,7 +20,7 @@ Fix applied:
     - Removed the hard-coded RESULT_INTERPRETATIONS and RECOMMENDATIONS
       tuples.
     - Added _read_narrative_facts(connection): one read of the same three
-      dbt relations the analysis page charts — marts.mart_attribution_health
+      dbt relations the analysis page charts - marts.mart_attribution_health
       (decided/match-status sums), marts.fct_revenue_attribution (valid
       conversions and commission), and intermediate.int_unmatched_conversions
       (loss-cause reason counts, the ADR-8 diagnostic view).
@@ -42,10 +42,10 @@ Fix applied:
 * tests/test_methodology_page.py
     - Added reconciliation tests whose expected values are read from the same
       relations (never hard-coded):
-        * test_methodology_prose_reconciles_with_live_marts — the default
+        * test_methodology_prose_reconciles_with_live_marts - the default
           real warehouse: caption + prose must equal the health-mart sums,
           revenue-valid totals/commission, and the reason taxonomy.
-        * test_methodology_narrative_renders_against_non_default_warehouse —
+        * test_methodology_narrative_renders_against_non_default_warehouse -
           regression with a *different valid warehouse* (12 decided, 3
           matched, 4/3/2 loss reasons, £270.75 commission) via
           PFM_DUCKDB_PATH; proves the narrative switches to those live totals
@@ -56,16 +56,16 @@ Fix applied:
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
-* streamlit/sections/overview.py  — first screen now explains the purpose:
+* streamlit/sections/overview.py  - first screen now explains the purpose:
     - "The problem" prose kept and extended with a "Purpose of this
       walkthrough" block (what / how / how much / what it means).
     - Architecture: a real client-side graphviz diagram
-      (ARCHITECTURE_DOT, st.graphviz_chart — no server-side graphviz binary,
+      (ARCHITECTURE_DOT, st.graphviz_chart - no server-side graphviz binary,
       rendered by the browser) showing the exact pipeline
       Excel sample -> Polars -> DuckDB raw -> dbt staging -> dbt intermediate
       -> dbt marts -> Streamlit, plus ARCHITECTURE_LAYERS with one-line
       responsibility per layer. Node labels match the real repo layout.
-* streamlit/sections/methodology.py  — final page replaces the Card-1
+* streamlit/sections/methodology.py  - final page replaces the Card-1
   placeholder with four sections, all prose-first:
     - Attribution method: the four deterministic rules in plain language
       (1. exact match only, 2. temporal window, 3. identifier priority,
@@ -82,26 +82,26 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
     - Recommendations: raise click-id coverage, propagate identifiers,
       persist between session and conversion, widen + monitor the window;
       each cites the live loss cause it addresses.
-* streamlit/sections/analysis.py  — each of the four Card-2 sections now
+* streamlit/sections/analysis.py  - each of the four Card-2 sections now
   opens with a textual interpretation (Reading the cards / Where the loss
   happens / Reading the charts / Reading the chart) driven by the same
   dbt relations the visuals use; the numbers are never hard-coded.
-* streamlit/sections/_components.py  — removed the now-dead
+* streamlit/sections/_components.py  - removed the now-dead
   placeholder_section() helper (no caller remains).
-* docs/decisions.md — ADR #9: narrative self-contained in Streamlit pages;
+* docs/decisions.md - ADR #9: narrative self-contained in Streamlit pages;
   layer responsibilities/rule vocabulary kept in sync with dbt headers.
-* README.md — walkthrough page narrative updated (architecture diagram +
+* README.md - walkthrough page narrative updated (architecture diagram +
   prose readings + methodology page responsibilities).
 
 Tests (all hermetic or real-warehouse AppTest, no mock of the pipeline)
 ------------------------------------------------------------------------
-* tests/_overview_driver.py + tests/_overview_page.py   — 3 AppTest render
+* tests/_overview_driver.py + tests/_overview_page.py   - 3 AppTest render
   checks against the REAL built worktree warehouse (PFM_DUCKDB_PATH): no
   exception; title + three section headers; problem stated in prose; the
   architecture diagram is rendered and its DOT payload carries every real
   stage label (Ingestion (Polars), DuckDB raw, dbt staging, dbt
   intermediate, dbt marts, Streamlit) so a stale diagram cannot pass.
-* tests/_methodology_driver.py + tests/_methodology_page.py — AppTest render
+* tests/_methodology_driver.py + tests/_methodology_page.py - AppTest render
   checks: no exception; four section headers; method vocabulary (Exact match
   only / Temporal window / Identifier priority / Recency tie-break /
   matched / ambiguous / unmatched); every limitation and recommendation
@@ -142,7 +142,7 @@ Notes
   future sample contains them (guards, empty-states, zero-filled
   vocabularies already in place from Card 2).
 
-Rework round 2 (review gate — execution lens: architecture truthfulness +
+Rework round 2 (review gate - execution lens: architecture truthfulness +
 required-relation contract)
 -------------------------------------------------------------------------------
 Reviewer finding (round 2): (1) the Overview architecture narrative claimed
@@ -152,7 +152,7 @@ contract validated only the three marts, so a marts-only custom warehouse
 passed bootstrap and crashed at render time.
 
 Fix applied:
-* streamlit/warehouse_bootstrap.py — centralized the required-relation
+* streamlit/warehouse_bootstrap.py - centralized the required-relation
   contract.
     - Added EXPECTED_INTERMEDIATE_VIEWS = ("int_unmatched_conversions",) and
       INTERMEDIATE_SCHEMA; REQUIRED_RELATIONS now lists every relation the
@@ -165,40 +165,40 @@ Fix applied:
       absent, so a marts-only warehouse is not treated as ready.
     - get_warehouse_connection() / _check_target_within_project() surface the
       readable PipelineError naming the missing relation(s) BEFORE any page
-      renders — a valid-looking custom warehouse can no longer crash later at
+      renders - a valid-looking custom warehouse can no longer crash later at
       render time with a DuckDB missing-relation error.
     - read_relation() docstring now states the app reads the consumer marts
       plus the single diagnostic intermediate view.
-* streamlit/sections/overview.py — architecture prose is now factually
+* streamlit/sections/overview.py - architecture prose is now factually
   accurate: the Streamlit layer responsibility says it "reads the published
   marts plus the single diagnostic view intermediate.int_unmatched_conversions";
   the closing "never re-implements joins" paragraph and the module docstring
   say the same; the relations-metrics block iterates REQUIRED_RELATIONS under
   the heading "Relations this walkthrough reads" with a caption explaining the
   ADR-8 diagnostic row.
-* streamlit/sections/_components.py — warehouse_readiness_banner() now counts
+* streamlit/sections/_components.py - warehouse_readiness_banner() now counts
   the full REQUIRED_RELATIONS contract ("N of M required relation(s) present
   (marts + the ADR-8 diagnostic view)").
 * streamlit/app.py + streamlit/sections/__init__.py + README.md +
-  docs/decisions.md (ADR 7) — consumer-contract wording aligned: the app reads
+  docs/decisions.md (ADR 7) - consumer-contract wording aligned: the app reads
   the published marts plus the single diagnostic view; custom PFM_DUCKDB_PATH
   warehouses must provide the full required-relation contract.
-* tests/test_streamlit_bootstrap.py — updated to required_relations_present();
+* tests/test_streamlit_bootstrap.py - updated to required_relations_present();
   new regressions:
-    - test_required_relations_present_false_when_diagnostic_view_missing —
+    - test_required_relations_present_false_when_diagnostic_view_missing -
       all three marts present but no view => not ready, warehouse_needs_build
       True, _missing_relations == ["intermediate.int_unmatched_conversions"].
     - test_get_warehouse_connection_raises_readable_error_when_diagnostic_view_missing
-      — the accessor raises PipelineError naming the view.
-    - test_check_target_rejects_custom_missing_diagnostic_view — _check_target
+      - the accessor raises PipelineError naming the view.
+    - test_check_target_rejects_custom_missing_diagnostic_view - _check_target
       names the missing view for a marts-only override.
-* tests/test_methodology_page.py — the synthetic warehouse builder now takes
+* tests/test_methodology_page.py - the synthetic warehouse builder now takes
   include_diagnostic_view (default True) so tests no longer silently add the
   view the contract demands; new regression
   test_methodology_override_missing_diagnostic_view_fails_at_bootstrap drives
   the real page against a marts-only override and proves it stops cleanly with
   the readable error (no render-time exception).
-* tests/test_overview_page.py — heading assertion updated to "Relations this
+* tests/test_overview_page.py - heading assertion updated to "Relations this
   walkthrough reads"; docstring aligned.
 
 Verification:
@@ -208,7 +208,7 @@ Verification:
   three pages serve HTTP 200.
 * git diff --check clean.
 
-Rework round 3 (review gate — contract lens: Limitations live facts)
+Rework round 3 (review gate - contract lens: Limitations live facts)
 ---------------------------------------------------------------------
 Reviewer finding: the PFM_DUCKDB_PATH override still let the walkthrough
 contradict the warehouse it renders: methodology.py's Limitations list
@@ -225,10 +225,10 @@ Fix applied:
     - Added _limitation_notes(connection): the five limitation bullets are
       now produced per render with warehouse-specific figures read live from
       the same consumer relations as the rest of the page:
-        + Small sample — decided-conversion total and date span from
+        + Small sample - decided-conversion total and date span from
           marts.mart_attribution_health (the full population, incl. denied),
           revenue-valid count from marts.fct_revenue_attribution.
-        + Limited PostHog window — the outside_posthog_sample_window count
+        + Limited PostHog window - the outside_posthog_sample_window count
           from intermediate.int_unmatched_conversions. The session-start
           date is not exposed to the consumer contract, so the boundary is
           stated structurally (orders before the earliest recorded session /
@@ -246,7 +246,7 @@ Fix applied:
       ground-truth queries over the same relations the bullets read
       (health-mart decided total + date span, revenue-valid count,
       outside-window count), then assert those exact live figures appear in
-      the rendered Limitations body — no fixed literals.
+      the rendered Limitations body - no fixed literals.
     - test_methodology_prose_reconciles_with_live_marts now also asserts the
       Limitations body reconciles to the real warehouse.
     - test_methodology_narrative_renders_against_non_default_warehouse now
@@ -254,7 +254,7 @@ Fix applied:
       warehouse (12/10/2 over 2026-06-01..2026-06-03) and that no
       delivered-sample limitation claim leaks ("200 PostHog sessions",
       "25 May", "9 May" absent).
-* README.md + docs/decisions.md (ADR 9 consequences) — documented that the
+* README.md + docs/decisions.md (ADR 9 consequences) - documented that the
   warehouse-specific limitation figures are read live from the same relations.
 
 Verification (round 3):
@@ -263,7 +263,7 @@ Verification (round 3):
   92 are revenue-valid) over the span 2026-05-09 to 2026-06-07" and "47
   conversions fall outside ...". Synthetic override renders "12 conversions
   (of which 10 are revenue-valid) ... 2026-06-01 to 2026-06-03" and "2
-  conversions fall outside ..." — no delivered-sample leakage.
+  conversions fall outside ..." - no delivered-sample leakage.
 * Real server boots with the worktree warehouse; /_stcore/health 200 and all
   three pages serve HTTP 200.
 * git diff --check clean.

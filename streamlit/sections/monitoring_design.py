@@ -1,9 +1,9 @@
 """Data quality monitoring design page (Area 2: Investigation, Integration & Monitoring).
 
 Pure-prose companion to ``docs/commission_monitoring_design.md``: it presents
-the five monitoring checks for the commission pipeline — what each validates,
+the five monitoring checks for the commission pipeline - what each validates,
 its threshold, its P1/P2/P3 severity, its implementation, and how on-call is
-notified — plus the alert routing and the monitoring architecture. It reads no
+notified - plus the alert routing and the monitoring architecture. It reads no
 warehouse relation, renders no chart, and states the design-only boundary: the
 production stack this page describes is not implemented here.
 """
@@ -17,7 +17,7 @@ DESIGN_INTRO = (
     "attribution quality, reconciliation variance, and accounting mapping "
     "coverage. Each check specifies what it validates, alert thresholds, "
     "P1/P2/P3 severity, and on-call response procedures. This is a design "
-    "reference for production — nothing on this page is implemented in this repository."
+    "reference for production - nothing on this page is implemented in this repository."
 )
 
 # One entry per check: (name, what it validates, metric, threshold, severity,
@@ -25,29 +25,29 @@ DESIGN_INTRO = (
 # docs/commission_monitoring_design.md.
 CHECKS = (
     (
-        "Check 1 — Commission source freshness",
+        "Check 1 - Commission source freshness",
         "The official commission source arrived within SLA.",
         "max(commission_date) and/or the ingestion timestamp of the "
         "commission raw table, compared to the expected delivery calendar.",
         "P1: no new data by 10:00 UTC on the expected delivery day. P2: "
         "arrival more than 2h later than the SLA, before the critical cutoff "
         "(example thresholds, configurable).",
-        "P1 — when daily financial reporting is unavailable.",
+        "P1 - when daily financial reporting is unavailable.",
         "dbt source freshness on the commission source, or a scheduled query "
         "over a pipeline metadata table; alert when freshness exceeds the "
         "threshold.",
         "Verify the commission integration sync, the source itself, the "
-        "BigQuery load, and the last dbt run — in that order.",
+        "BigQuery load, and the last dbt run - in that order.",
     ),
     (
-        "Check 2 — Duplicate / invalid TrackNow conversions",
+        "Check 2 - Duplicate / invalid TrackNow conversions",
         "The grain of the conversion table: one row per conversion, "
         "primary conversion identifier present, statuses within the known set.",
         "Duplicate tracknow_order_id count; null conversion IDs; statuses "
         "outside the accepted set.",
         "Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert. "
         "Any invalid status > 0 → alert.",
-        "P1 — duplicates can double-count revenue and commission.",
+        "P1 - duplicates can double-count revenue and commission.",
         "dbt tests: unique and not_null on tracknow_order_id, "
         "accepted_values on status, plus a singular test for the business "
         "grain.",
@@ -55,16 +55,16 @@ CHECKS = (
         "quarantine the batch and re-run ingestion.",
     ),
     (
-        "Check 3 — Attribution unmatched-rate regression",
+        "Check 3 - Attribution unmatched-rate regression",
         "Attribution quality has not regressed: conversions keep joining to "
         "tracking sessions at the expected rate.",
         "unmatched_rate = unmatched_conversions / total_conversions, from "
         "mart_attribution_health.",
         "P2 if the rate exceeds 25%, or rises more than 5 percentage points "
         "above the trailing 7-day baseline. The reported ~18% production gap "
-        "is an observation, not a hardcoded SLA — the baseline comes from "
+        "is an observation, not a hardcoded SLA - the baseline comes from "
         "recent history and thresholds are configuration.",
-        "P2 — escalates to P1 if the unmatched rate exceeds 40% (hard ceiling) "
+        "P2 - escalates to P1 if the unmatched rate exceeds 40% (hard ceiling) "
         "or a critical report goes dark.",
         "Scheduled query over mart_attribution_health in production, broken "
         "down by total, channel, firm, and device/browser where available.",
@@ -73,7 +73,7 @@ CHECKS = (
         "owner if capture broke.",
     ),
     (
-        "Check 4 — Commission reconciliation variance",
+        "Check 4 - Commission reconciliation variance",
         "QuickBooks invoices and TrackNow-derived commission agree within "
         "materiality.",
         "absolute_delta and pct_delta per firm_id and reconciliation period, "
@@ -81,20 +81,20 @@ CHECKS = (
         "P1: absolute delta > £500. P2: pct delta > 5% and absolute delta > "
         "£50. P3: same sign delta for 3+ consecutive periods (regardless of "
         "materiality).",
-        "P1/P2/P3 — by materiality.",
+        "P1/P2/P3 - by materiality.",
         "Monitoring query over int_quickbooks_tracknow_reconciliation "
         "(output of the reconciliation design).",
         "The alert carries firm, period, both values, and both deltas with a "
         "link to the reconciliation query; Finance is notified for P1/P2.",
     ),
     (
-        "Check 5 — Firm / accounting mapping coverage",
+        "Check 5 - Firm / accounting mapping coverage",
         "Every QuickBooks invoice/customer resolves to a firm_id via the "
         "dim_firm_accounting_mapping bridge.",
         "unmapped_invoices / total_invoices from the reconciliation output.",
         "Any new unmapped invoice → P2. More than 1% of the population "
         "unmapped → P1 if reconciliation is blocked.",
-        "P2 — by default; P1 only when reconciliation cannot close.",
+        "P2 - by default; P1 only when reconciliation cannot close.",
         "dbt test / monitoring query over dim_firm_accounting_mapping and "
         "the reconciliation output (left-anti join for unmapped keys).",
         "Add the missing mapping (customer id → firm_id, never a name join), "
@@ -104,7 +104,7 @@ CHECKS = (
 
 FIRST_CHECK_NOTE = (
     "**Build Check 1 (Commission source freshness) first.** If the source "
-    "data has not arrived, every downstream check is unreliable — freshness "
+    "data has not arrived, every downstream check is unreliable - freshness "
     "is the precondition for the other four. It is simple to implement "
     "(one freshness query on one relation), detects failure early, cuts "
     "time-to-diagnosis, and protects reporting and reconciliation before "

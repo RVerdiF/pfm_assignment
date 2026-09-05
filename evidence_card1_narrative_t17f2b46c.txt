@@ -1,4 +1,4 @@
-Evidence — Card 1 — Narrative: attribution, identity design and the 18% investigation
+Evidence - Card 1 - Narrative: attribution, identity design and the 18% investigation
 Branch: card-1-final (clean, based on origin/main)
 
 What changed (final)
@@ -12,7 +12,7 @@ What changed (final)
      an anonymised, bounded extract (100 TrackNow conversions / 200 PostHog
      sessions); the provided anonymised sample does not contain deterministic
      cross-system identifier overlap, so the local exact-match model attributes
-     none of it — a factual property of the file, not a production measurement.
+     none of it - a factual property of the file, not a production measurement.
    - Visual callout (st.info):
        Reported production gap: 18%
        Observed deterministic match rate in provided anonymised sample: 0%
@@ -29,17 +29,17 @@ What changed (final)
      extract; production would additionally expose identity-bridge,
      propagation and collection gaps the file cannot show.
 
-3. Methodology page (streamlit/sections/methodology.py) — four sections:
-   1. "Production attribution design" — end-to-end identity flow
+3. Methodology page (streamlit/sections/methodology.py) - four sections:
+   1. "Production attribution design" - end-to-end identity flow
       (gclid/fbclid → PostHog distinct_id/session → attribution bridge →
       TrackNow click_id → conversion resolves bridge) plus utm_content as
       Meta ad/creative enrichment.
-   2. "Sample implementation" — four deterministic rules framed as sample
+   2. "Sample implementation" - four deterministic rules framed as sample
       constraint.
-   3. "Edge cases and data-model handling" — 5 explicit cases: missing
+   3. "Edge cases and data-model handling" - 5 explicit cases: missing
       click_id, cross-session, multiple paid clicks, cookie reset/cross-device,
       late-arriving data.
-   4. "How I would investigate the reported 18% attribution gap" — six
+   4. "How I would investigate the reported 18% attribution gap" - six
       pseudo-BigQuery diagnostic queries (using documented production contract:
       TrackNow conversions, attribution.bridge, PostHog sessions):
       - Query 1: TrackNow LEFT JOIN bridge LEFT JOIN PostHog; unmatched = ph.session_id IS NULL.
@@ -52,7 +52,7 @@ What changed (final)
       Six hypotheses, each with Test and Fix. Root-cause boundary: "The
       provided anonymised sample does not contain a deterministic cross-system
       identity overlap."
-   5. "Limitations" and "Recommendations" — unchanged structure.
+   5. "Limitations" and "Recommendations" - unchanged structure.
 
 4. dbt documentation (no SQL logic changed; join still exact only)
    - ADR 3 rewritten: exact click-id matching is the sample constraint;

@@ -1,6 +1,6 @@
 # QuickBooks → BigQuery → dbt reconciliation design (Area 2)
 
-Design answer for **Area 2: Investigation, Integration & Monitoring** — how
+Design answer for **Area 2: Investigation, Integration & Monitoring** - how
 QuickBooks invoices would be reconciled against TrackNow commission daily.
 This document is a **design only**: no QuickBooks connection, Airbyte
 workspace, BigQuery dataset, or dbt model from it is implemented in this
@@ -52,7 +52,7 @@ Slack / PagerDuty / email
 | Layer | Relation | Grain | Materialization |
 | --- | --- | --- | --- |
 | Raw (Airbyte) | `raw_quickbooks.invoices` | One row per raw invoice record/version as delivered by Airbyte | BigQuery table owned by Airbyte |
-| Mapping | `dim_firm_accounting_mapping` | One row per (`firm_id`, `valid_from`) — SCD-style temporal versions | dbt seed (curated) |
+| Mapping | `dim_firm_accounting_mapping` | One row per (`firm_id`, `valid_from`) - SCD-style temporal versions | dbt seed (curated) |
 | Staging | `stg_quickbooks_invoices` | One row per current invoice | View |
 | TrackNow | `fct_commission_daily` | One row per (`commission_date`, `firm_id`) | Table |
 | Intermediate | `int_quickbooks_tracknow_reconciliation` | One row per (`invoice_id`, `firm_id`) with `period_start`/`period_end` | Table |
@@ -64,7 +64,7 @@ Slack / PagerDuty / email
 - **Streams:** `Invoices` is the minimum required stream. `Payments` and
   `Credit Memos` are added only if Finance needs invoiced-vs-paid distinction
   or refund handling; `Customers` only to enrich names for the mapping review
-  workflow — never to join.
+  workflow - never to join.
 - **Sync mode:** incremental, cursor `MetaData.LastUpdatedTime` (the
   connector's reported updated-at field), primary key `Id`.
 - **Frequency:** daily, scheduled before the dbt run. Hourly only if Finance
@@ -77,7 +77,7 @@ Slack / PagerDuty / email
 
 `raw_quickbooks.invoices` is source-shaped: one row per record/version the
 connector delivers. If the connector appends multiple versions of the same
-invoice, staging deduplicates — the raw layer never does.
+invoice, staging deduplicates - the raw layer never does.
 
 Expected fields:
 
@@ -105,13 +105,13 @@ _airbyte_extracted_at ingestion timestamp
 The core of the design: getting from a QuickBooks customer to a PFM
 `firm_id` **without assuming the IDs match and without joining on name**.
 
-- **Grain:** one row per (`firm_id`, `valid_from`) — SCD-style temporal versions, so a firm can be remapped over time without losing history.
+- **Grain:** one row per (`firm_id`, `valid_from`) - SCD-style temporal versions, so a firm can be remapped over time without losing history.
 - **Fields:** `firm_id`, `firm_name`, `quickbooks_customer_id`, optional
   `quickbooks_customer_name`, `valid_from`, optional `valid_to` (open-ended
-  when `valid_to` is null — the mapping is current until a newer row supersedes
+  when `valid_to` is null - the mapping is current until a newer row supersedes
   it).
-- **Implementation:** a dbt seed — a small, manually curated CSV reviewed by
-  Finance — because the mapping is a business fact no source system owns.
+- **Implementation:** a dbt seed - a small, manually curated CSV reviewed by
+  Finance - because the mapping is a business fact no source system owns.
   Enforced tests: `unique` on (`firm_id`, `valid_from`) (a firm can be
   remapped over time, but not twice from the same date), `not_null` on
   `firm_id`, `quickbooks_customer_id`, and `valid_from`, and a non-overlap
@@ -209,7 +209,7 @@ period contains them become rows with `invoice_id = null` for that
 
 - **Grain:** one row per active reconciliation failure (every row of
   `int_quickbooks_tracknow_reconciliation` whose `reconciliation_status`
-  is actionable — i.e. anything other than `matched`).
+  is actionable - i.e. anything other than `matched`).
 - **Fields:** `reconciliation_date`, `firm_id`, `firm_name`, `invoice_id`,
   `period_start`, `period_end`, `quickbooks_amount`, `tracknow_amount`,
   `absolute_delta`, `pct_delta`, `reconciliation_status`, `severity`,
@@ -227,9 +227,9 @@ Evaluated in this order (first match wins):
 | --- | --- |
 | `currency_mismatch` | Invoice currency is not GBP and no conversion contract is defined. |
 | `unmapped_firm` | `quickbooks_customer_id` has no row in `dim_firm_accounting_mapping`. |
-| `missing_tracknow` | `tracknow_row_count = 0` — invoice whose period contains no TrackNow commission rows (distinguishes "no rows" from "rows summing to zero"). |
+| `missing_tracknow` | `tracknow_row_count = 0` - invoice whose period contains no TrackNow commission rows (distinguishes "no rows" from "rows summing to zero"). |
 | `missing_quickbooks` | Commission period with no covering invoice (inverse-direction rows). |
-| `matched` | `absolute_delta <= £5 OR pct_delta <= 1%` (example tolerance — **to validate with Finance**, configured as dbt vars, never hard-coded). |
+| `matched` | `absolute_delta <= £5 OR pct_delta <= 1%` (example tolerance - **to validate with Finance**, configured as dbt vars, never hard-coded). |
 | `variance` | Difference above tolerance. |
 
 ## 7. Data quality checks per layer
@@ -265,7 +265,7 @@ alert model
 notification (Slack / PagerDuty / email)
 ```
 
-I would run dbt only after the Airbyte sync completes successfully — a
+I would run dbt only after the Airbyte sync completes successfully - a
 scheduler dependency (Airbyte completion webhook, or the orchestrator task
 that triggers both), never a fixed clock time, so dbt never reconciles
 against a half-loaded raw table. Failures at any step block the notification

@@ -2,8 +2,8 @@
 
 Drives the Area-2 design section through AppTest.from_file (a real Streamlit
 script that imports the section module). Like the "What I'd do next" page,
-this section is pure prose by design — it reads no warehouse relation and
-renders no chart — so the checks assert the card's acceptance criteria: the
+this section is pure prose by design - it reads no warehouse relation and
+renders no chart - so the checks assert the card's acceptance criteria: the
 architecture with Airbyte -> BigQuery raw -> dbt staging -> reconciliation ->
 alerts, an explicit grain per layer, the QuickBooks-customer -> firm_id
 mapping strategy (never a name join), the reconciliation status taxonomy with

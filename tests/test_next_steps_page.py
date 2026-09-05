@@ -2,8 +2,8 @@
 
 Drives the final walkthrough section through AppTest.from_file (a real
 Streamlit script that imports the section module). Unlike the other pages this
-one is pure prose by design — it reads no warehouse relation and renders no
-chart — so the checks assert the Card-4 acceptance criteria: the section is a
+one is pure prose by design - it reads no warehouse relation and renders no
+chart - so the checks assert the Card-4 acceptance criteria: the section is a
 real page at the end of the walkthrough, it names every production topic with
 a clear purpose (BigQuery, dbt-bigquery, Terraform, Cloud Storage, Cloud Run
 Jobs/Cloud Build, GitHub Actions, monitoring), it makes the change-vs-constant

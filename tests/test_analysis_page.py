@@ -5,7 +5,7 @@ that imports the section module, so ``st`` globals resolve exactly as they do
 in the running app). The warehouse is the real built dbt warehouse of this
 worktree, exposed through the standard PFM_DUCKDB_PATH override.
 
-These are functional render checks — they verify the acceptance criterion that
+These are functional render checks - they verify the acceptance criterion that
 the numbers shown come from the dbt marts and reconcile to them.
 """
 from __future__ import annotations

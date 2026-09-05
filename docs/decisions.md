@@ -20,7 +20,7 @@ contract.
 
 ---
 
-## 2. Fully null rows are preserved — no `dropna(how="all")`
+## 2. Fully null rows are preserved - no `dropna(how="all")`
 
 **Context:** The source workbook defines its own extent; some interior rows are
 entirely empty.
@@ -52,7 +52,7 @@ production architecture. In production the identity contract must be
 explicitly designed: ad-click identifiers (`gclid`/`fbclid`) are captured at
 the landing and persisted with the PostHog `distinct_id`/session, propagated
 onto the affiliate outbound click, and carried into TrackNow so `click_id` can
-close the loop. `affiliate_session_id` is part of that TrackNow contract —
+close the loop. `affiliate_session_id` is part of that TrackNow contract -
 the sample's inability to relate it to a PostHog `session_id` does **not**
 prove it irrelevant. Without a documented contract, no
 `affiliate_session_id = PostHog.session_id` equality is assumed.
@@ -112,12 +112,12 @@ environment where `warehouse/pfm.duckdb` does not exist yet, while still being
 a thin read-only consumer of dbt marts.
 
 **Decision:** The app checks for the warehouse file and the *required
-relations* on startup — the consumer marts plus the single
+relations* on startup - the consumer marts plus the single
 `intermediate.int_unmatched_conversions` diagnostic view (ADR 8), which both
 the analysis and methodology pages read. When they are missing, it runs the
-canonical pipeline once per Streamlit session — `python ingestion/load_excel.py`,
+canonical pipeline once per Streamlit session - `python ingestion/load_excel.py`,
 then `dbt build` with the project-local profile (created from
-`dbt/profiles.yml.example` when absent) — before opening the connection
+`dbt/profiles.yml.example` when absent) - before opening the connection
 read-only. The connection is cached with `st.cache_resource`. The app never
 re-implements attribution or business joins; it reads only the published
 consumer relations.
@@ -125,7 +125,7 @@ consumer relations.
 **Consequences:** A fresh checkout can launch the app without manual pipeline
 steps. The bootstrap is limited to the default project warehouse (custom
 `PFM_DUCKDB_PATH` values must point at an already-provisioned warehouse
-satisfying the full required-relation contract — a warehouse that passes only
+satisfying the full required-relation contract - a warehouse that passes only
 the mart checks cannot crash later at render time with a missing-relation
 error), and pipeline failures surface as readable errors instead of silent
 partial state.
@@ -143,7 +143,7 @@ app would duplicate the attribution-adjacent classification logic the project
 explicitly keeps out of Python.
 
 **Decision:** The consumer may read `intermediate.int_unmatched_conversions`
-as a read-only diagnostic relation — an aggregate over its pre-computed
+as a read-only diagnostic relation - an aggregate over its pre-computed
 `unmatched_reason` column only, never a join. It remains forbidden from
 reading raw/staging relations and from re-implementing attribution rules. The
 intermediate relation is materialized as a dbt view, so it always mirrors the
@@ -185,10 +185,10 @@ reads:
 
 **Consequences:** The app is a complete walkthrough with a clear heading
 hierarchy and short prose around each chart. Every narrative quantity cited
-in prose — health-mart sums, revenue-valid conversions and commission,
+in prose - health-mart sums, revenue-valid conversions and commission,
 loss-cause reason counts, and the warehouse-specific limitation figures
 (decided/valid conversion counts, the conversion-date span, and the
-outside-window count) — is read live from the same dbt relations as the
+outside-window count) - is read live from the same dbt relations as the
 charts (the health mart, the revenue mart, and the pre-computed
 `int_unmatched_conversions` diagnostic view), so text cannot drift from data
 and a different valid warehouse via the documented `PFM_DUCKDB_PATH` override
@@ -204,7 +204,7 @@ with `The current project could not be installed: No file/folder found for
 package pfm-assignment`. Community Cloud treats a root `pyproject.toml` as a
 **Poetry** manifest and runs `poetry install`. This repository is a plain
 setuptools/PEP 621 project (`[project]` + `[build-system]` with setuptools)
-— not a Poetry project and not an installable package — so Poetry's attempt
+- not a Poetry project and not an installable package - so Poetry's attempt
 to install the project itself fails. Adding `package-mode = false` would only
 help a genuine Poetry project; here the correct, supported path is the one
 Community Cloud prefers.
@@ -214,7 +214,7 @@ Community Cloud prefers.
 Cloud resolves `requirements.txt` before `pyproject.toml`, so the deploy
 never invokes Poetry and `pyproject.toml` remains the single manifest for
 local development. Only one dependency file (`requirements.txt`) drives the
-deploy. The app runs on **Python 3.12** — Community Cloud's default and the
+deploy. The app runs on **Python 3.12** - Community Cloud's default and the
 version the pins are validated against. No artificial Python package is
 created to satisfy a package manager.
 
@@ -241,11 +241,11 @@ with a property of the sample.
 
 **Decision:** The two figures are always presented as separate populations:
 
-- **Reported production issue** — an input premise from the assignment:
+- **Reported production issue** - an input premise from the assignment:
   18% of TrackNow conversions in the last 30 days have no matching PostHog
   session. It is cited as the investigation subject, never re-derived from
   the sample.
-- **Observed deterministic match rate in the provided anonymised sample** —
+- **Observed deterministic match rate in the provided anonymised sample** -
   a factual property of the local executable model under exact matching,
   measured from the dbt marts on every render.
 
@@ -260,5 +260,5 @@ from what the sample demonstrates.
 rate as the production unmatched rate, as evidence about the production root
 cause, or as a reason to redesign production attribution. Conversely, the
 18% premise is never recomputed from the Excel data. The local SQL keeps its
-exact-match logic — no fuzzy bridge is introduced to fabricate matches — and
+exact-match logic - no fuzzy bridge is introduced to fabricate matches - and
 the sample's results continue to reconcile with the published marts.

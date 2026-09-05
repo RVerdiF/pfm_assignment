@@ -25,7 +25,7 @@ the single ADR-8 diagnostic intermediate view).
 ## What is not implemented
 
 - No real BigQuery deployment, Airbyte connection, or QuickBooks API access.
-- No production data is delivered or queried — all executable metrics come
+- No production data is delivered or queried - all executable metrics come
   from the anonymised sample. The 18% production-gap figure is an
   assignment-provided reported premise, not a number computed here.
 - No actual alerting infrastructure (no Slack/paging integration, no dbt
@@ -41,7 +41,7 @@ design-only.
 data/source.xlsx  (Sample TrackNow Checkouts + Sample PostHog Sessions)
         |
         v
-ingestion/load_excel.py  (Polars, snake_case only — values and nulls untouched)
+ingestion/load_excel.py  (Polars, snake_case only - values and nulls untouched)
         |
         v
 warehouse/pfm.duckdb  (raw schema: raw.tracknow_checkouts, raw.posthog_sessions)
@@ -184,13 +184,13 @@ project has no external package dependencies, so `dbt deps` is not required.
 
 Tests run in two layers:
 
-1. **pytest** (`tests/`) — Python-level behavior. `tests/test_load_excel.py`
+1. **pytest** (`tests/`) - Python-level behavior. `tests/test_load_excel.py`
    covers ingestion: snake_case normalization, sheet-to-table mapping, raw
    table creation, preservation of fully null interior rows
    (`drop_empty_rows=False`), and Excel-to-DuckDB reconciliation.
    `tests/test_project_structure.py` guards the project manifest and the
    checked-in BigQuery consumption asset.
-2. **dbt tests** — data contracts inside the model `schema.yml` files
+2. **dbt tests** - data contracts inside the model `schema.yml` files
    (`not_null`, `unique`, `accepted_values`) plus 23 singular tests under
    `dbt/tests/` that prove invariants: no fan-out, exact-match-only
    attribution, row parity between layers, unmatched reasons, and marts
@@ -216,12 +216,12 @@ PFM_DUCKDB_PATH=/path/to/pfm.duckdb streamlit run streamlit/app.py
 
 The app is designed to start even on a fresh environment where
 `warehouse/pfm.duckdb` does not exist yet. On startup it checks for the
-warehouse file and the *required relations* — the consumer marts plus the
+warehouse file and the *required relations* - the consumer marts plus the
 `intermediate.int_unmatched_conversions` diagnostic view that both the
 analysis and methodology pages read. When they are missing it runs the
-canonical pipeline once — `python ingestion/load_excel.py`, then `dbt build`
+canonical pipeline once - `python ingestion/load_excel.py`, then `dbt build`
 using the project-local profile (created from `dbt/profiles.yml.example` when
-absent) — and only then opens the connection. The bootstrap is cached for the
+absent) - and only then opens the connection. The bootstrap is cached for the
 Streamlit session, so the same execution never rebuilds the warehouse twice.
 Failures are presented as readable errors in the app.
 
@@ -235,7 +235,7 @@ profile are wired to that location.
 
 Community Cloud treats a root `pyproject.toml` as a **Poetry** manifest and
 runs `poetry install`. This repository is a plain setuptools/PEP 621 project
-— it is not a Poetry project and not an installable package — so that path
+- it is not a Poetry project and not an installable package - so that path
 fails with:
 
 ```text
@@ -263,13 +263,13 @@ ships a wheel for it yet, so the build would try to compile from source.
 On first boot the app finds no `warehouse/pfm.duckdb` and no local dbt
 profile, runs the canonical bootstrap (ingestion, then `dbt build` with the
 profile created from `dbt/profiles.yml.example`), and then serves the
-walkthrough pages — see the reproducible-bootstrap section above.
+walkthrough pages - see the reproducible-bootstrap section above.
 
 ### Pages and relations
 
 The walkthrough is organised around the assignment's two areas:
 
-#### Area 1 — Attribution & data modeling
+#### Area 1 - Attribution & data modeling
 The pages in Area 1 read directly from the published marts and one diagnostic intermediate view:
 - **Overview**: presents the pipeline architecture, outlines each layer's responsibility, and distinguishes the reported 18% production gap (an assignment premise) from the extract's 0% match rate.
 - **Attribution analysis**: reports valid conversion volume, commission, match and non-match rates, and marketing attribution by UTM source. It visualizes the non-match taxonomy using `intermediate.int_unmatched_conversions` and reconciles decided rows against `marts.mart_attribution_health`.
@@ -281,7 +281,7 @@ Published relations consumed:
 - `marts.fct_commission_daily_local`: local daily commission proxy.
 - `intermediate.int_unmatched_conversions`: pre-computed non-match reason breakdown (read-only diagnostic view).
 
-#### Area 2 — Investigation, integration & monitoring
+#### Area 2 - Investigation, integration & monitoring
 The pages in Area 2 are design references that do not query the local warehouse:
 - **Investigation & monitoring**: documents the 18% gap investigation plan with six diagnostic BigQuery queries, six hypotheses with associated tests and fixes, and root-cause guidance.
 - **Data quality monitoring**: presents the five commission pipeline monitoring checks (freshness, conversion grain, unmatched rate regression, reconciliation variance, mapping coverage), P1/P2/P3 alert severities, and on-call routing policies (`docs/commission_monitoring_design.md`).
@@ -405,19 +405,19 @@ warehouse/pfm.duckdb               Generated local warehouse (ignored)
 
 ## Documentation
 
-- `ingestion/ingestion.md` — sheet-to-table mapping, snake_case contract, raw
+- `ingestion/ingestion.md` - sheet-to-table mapping, snake_case contract, raw
   schema, and how to re-run ingestion.
-- `notebooks/README.md` — EDA purpose, execution, and conclusions that shaped
+- `notebooks/README.md` - EDA purpose, execution, and conclusions that shaped
   the dbt pipeline.
-- `docs/decisions.md` — closed decisions: Polars ingestion, preservation of
+- `docs/decisions.md` - closed decisions: Polars ingestion, preservation of
   fully null rows, exact click-ID matching, local DuckDB, mandatory
   review -> PR -> manual merge flow, English-only code.
-- `docs/quickbooks_reconciliation_design.md` — Area 2 design answer: the
+- `docs/quickbooks_reconciliation_design.md` - Area 2 design answer: the
   QuickBooks -> Airbyte -> BigQuery raw -> dbt staging -> reconciliation ->
   alert pipeline, with per-layer grains, the
   `dim_firm_accounting_mapping` bridge, the reconciliation status taxonomy,
   and DQ checks per layer.
-- `docs/commission_monitoring_design.md` — Area 2 design answer: the five
+- `docs/commission_monitoring_design.md` - Area 2 design answer: the five
   data quality checks for the commission pipeline (source freshness,
   conversion grain, attribution unmatched-rate regression, reconciliation
   variance, mapping coverage) with thresholds, P1/P2/P3 severities, alert

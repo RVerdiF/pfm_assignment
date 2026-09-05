@@ -3,7 +3,7 @@
 Area-2 narrative for the reported production gap: the 18% reported gap as the
 assignment premise, the diagnostic queries that would run against production,
 and the hypotheses and fixes. Companion prose to the design pages of the same
-area — the five monitoring checks and alerting/on-call live on the "Data
+area - the five monitoring checks and alerting/on-call live on the "Data
 quality monitoring" page, and the QuickBooks reconciliation design lives on
 its own page. It reads no warehouse relation, renders no chart, and states
 the boundary: production tables were not delivered, so nothing here is
@@ -22,7 +22,7 @@ PAGE_INTRO = (
     "Methodology page."
 )
 
-# Pointer to the area's design pages — the six Investigation & Monitoring
+# Pointer to the area's design pages - the six Investigation & Monitoring
 # elements required by the assignment's Area 2: elements 1-3 on this page,
 # elements 4-6 on the companion design pages. A pointer, not duplication:
 # each element lives in exactly one place.
@@ -58,12 +58,12 @@ AREA_MAP = (
 # Constants below are the investigation narrative, relocated verbatim from
 # the Area 1 Methodology page (streamlit/sections/methodology.py) so the
 # Area 2 content sits in the Area 2 navigation group. The sketches are not
-# executed code. No column is invented — every field either exists in the
+# executed code. No column is invented - every field either exists in the
 # documented staging schema or is explicitly named as a hypothetical bridge
 # column with its role stated.
 INVESTIGATION_QUERIES = (
     (
-        "Query 1 — Daily baseline of the gap",
+        "Query 1 - Daily baseline of the gap",
         "Confirm the trend and temporal concentration of the reported "
         "unmatched share before any breakdown is trusted.",
         """\
@@ -86,7 +86,7 @@ group by t.conversion_date
 order by t.conversion_date;""",
     ),
     (
-        "Query 2 — Identifier coverage",
+        "Query 2 - Identifier coverage",
         "Measure how often each attribution key is even present: missing "
         "`click_id`, missing `affiliate_session_id`, presence of an "
         "attribution bridge record, and conversions that carry an identifier "
@@ -111,7 +111,7 @@ left join posthog.sessions ph
 where t.created_date >= date_sub(current_date(), interval 30 day);""",
     ),
     (
-        "Query 3 — Gap by channel",
+        "Query 3 - Gap by channel",
         "Split unmatched conversions by acquiring channel: Google, Meta, and "
         "other/unknown. A gap concentrated in one ad platform points at that "
         "platform's click-identifier plumbing.",
@@ -135,13 +135,13 @@ group by bridge.acquired_channel
 order by unmatched desc;""",
     ),
     (
-        "Query 4 — Gap by TrackNow-side dimensions",
+        "Query 4 - Gap by TrackNow-side dimensions",
         "Break the unmatched cohort down by the TrackNow conversion's own "
         "dimensions: firm, trading platform, and first-order status. A gap "
         "concentrated in a specific firm or platform points at that partner's "
         "integration. The PostHog session is missing by definition on the "
         "unmatched rows, so every dimension comes from the TrackNow conversion "
-        "itself — no PostHog field is sourced, and no column is invented beyond "
+        "itself - no PostHog field is sourced, and no column is invented beyond "
         "the documented TrackNow schema (firm_id, trading_platform, first_order).",
         """\
 -- The unmatched cohort has no PostHog session by definition, so the
@@ -163,13 +163,13 @@ group by 1, 2, 3
 order by unmatched_conversions desc;""",
     ),
     (
-        "Query 5 — Conversion lag (cross-session loss)",
+        "Query 5 - Conversion lag (cross-session loss)",
         "Measure the lag between the first/paid session, the affiliate "
         "click, and the conversion. Long lags expose conversions lost to "
         "lookback-window expiry or cross-session identity breaks rather "
         "than to broken click tracking. The documented TrackNow contract "
-        "exposes only a date-grain `created_date` — it has no conversion "
-        "timestamp — so the executable part of this sketch runs at the "
+        "exposes only a date-grain `created_date` - it has no conversion "
+        "timestamp - so the executable part of this sketch runs at the "
         "documented date grain, computed as BigQuery `DATE_DIFF` over dates "
         "with the conversion date as the end and the session start date "
         "as the start, so a conversion after its session yields a "
@@ -194,7 +194,7 @@ select
   ph.session_start_at as winning_session_start,
   -- Live-session semantics (same as Queries 1-4): a session is missing
   -- when its row did not match (session_id null). A matched row with a
-  -- null timestamp keeps the lag nullable — timestamp completeness is
+  -- null timestamp keeps the lag nullable - timestamp completeness is
   -- not session existence.
   ph.session_id is null as no_posthog_session
 from tracknow.conversions t
@@ -225,7 +225,7 @@ where t.created_date >= date_sub(current_date(), interval 30 day)
 order by session_lag_hours desc;""",
     ),
     (
-        "Query 6 — Attribution bridge propagation audit",
+        "Query 6 - Attribution bridge propagation audit",
         "Audit whether the identifier captured at the outbound affiliate click "
         "is the same one that reappears on the conversion. Requires a stable "
         "click identifier (e.g. event_id or click_ref) that links the outbound "
@@ -254,22 +254,22 @@ order by conversions desc;""",
 )
 
 # The hypothesis set for the reported gap. Each hypothesis names the test
-# that would confirm it and the fix that would follow — none is claimed to
+# that would confirm it and the fix that would follow - none is claimed to
 # be proven by the delivered sample.
 INVESTIGATION_HYPOTHESES = (
     (
-        "Hypothesis 1 — Identifier lost before the bridge",
+        "Hypothesis 1 - Identifier lost before the bridge",
         "`gclid` / `fbclid` exists on the landing session but is never "
         "persisted or propagated onto the affiliate link, so TrackNow "
         "receives a click it cannot tie to PostHog.",
-        "**Test:** compare identifier coverage along the funnel — landing "
+        "**Test:** compare identifier coverage along the funnel - landing "
         "session vs affiliate outbound click vs TrackNow conversion (queries "
         "2 and 6).",
         "**Fix:** persist ad-click identifiers first-party and attach them "
         "consistently to the affiliate redirect.",
     ),
     (
-        "Hypothesis 2 — Cross-session conversion",
+        "Hypothesis 2 - Cross-session conversion",
         "The user enters through paid traffic but converts in a later "
         "session, so the converting session carries no click identifier and "
         "the original paid session is never linked.",
@@ -281,7 +281,7 @@ INVESTIGATION_HYPOTHESES = (
         "click.",
     ),
     (
-        "Hypothesis 3 — Cross-device / cookie reset / incognito",
+        "Hypothesis 3 - Cross-device / cookie reset / incognito",
         "The PostHog `distinct_id` changes before purchase (new device, "
         "cleared cookies, incognito), so the converting identity never saw "
         "the ad click.",
@@ -292,7 +292,7 @@ INVESTIGATION_HYPOTHESES = (
         "anonymous-to-known mapping so pre-login sessions survive.",
     ),
     (
-        "Hypothesis 4 — Redirect stripping / affiliate integration issue",
+        "Hypothesis 4 - Redirect stripping / affiliate integration issue",
         "An affiliate network or redirect template strips query parameters, "
         "so the click identifier never reaches TrackNow.",
         "**Test:** unmatched rate by firm / trading platform (query 4) "
@@ -302,7 +302,7 @@ INVESTIGATION_HYPOTHESES = (
         "QA that asserts parameter survival end to end.",
     ),
     (
-        "Hypothesis 5 — Consent / ad blocker / PostHog collection gap",
+        "Hypothesis 5 - Consent / ad blocker / PostHog collection gap",
         "The TrackNow conversion happens, but the PostHog session is never "
         "recorded client-side (consent not granted, blocker, script "
         "failure).",
@@ -314,7 +314,7 @@ INVESTIGATION_HYPOTHESES = (
         "analytics through a first-party tracking endpoint.",
     ),
     (
-        "Hypothesis 6 — Ingestion latency / freshness",
+        "Hypothesis 6 - Ingestion latency / freshness",
         "The two systems land data at different speeds, so conversions are "
         "counted as unmatched until the matching PostHog session arrives.",
         "**Test:** re-run the match over an older window and count records "
@@ -347,7 +347,7 @@ def render() -> None:
         "the companion pages."
     )
     for element, where in AREA_MAP:
-        st.markdown(f"- **{element}** — {where}")
+        st.markdown(f"- **{element}** - {where}")
 
     st.subheader("The reported 18% gap")
     st.write(

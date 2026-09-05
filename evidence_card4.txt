@@ -1,10 +1,10 @@
-Evidence — Card 4 (t_3b8f9d4c) — "What I'd do next": production evolution
+Evidence - Card 4 (t_3b8f9d4c) - "What I'd do next": production evolution
 Branch: wt/t_3b8f9d4c  (pushed to RVerdiF/pfm_assignment)
 Base:   wt/t_485f334d f7d2ed4 (Card 3 approved head; its PR to main is open)
 
 Scope delivered (all acceptance criteria map to code/docs/tests)
 ---------------------------------------------------------------
-* streamlit/sections/next_steps.py  — new final walkthrough page
+* streamlit/sections/next_steps.py  - new final walkthrough page
   ("What I'd do next"), pure prose by design:
     - Main message verbatim from the card: "This implementation is
       intentionally local and self-contained. In production, I would
@@ -37,16 +37,16 @@ Scope delivered (all acceptance criteria map to code/docs/tests)
       repository (no BigQuery datasets, no Terraform, no CI/CD).
     - Deliberately reads NO warehouse relation and renders NO chart, so it
       adds no relation to the consumer contract and no fictional resource.
-* streamlit/app.py  — registers the page last in the navigation
+* streamlit/app.py  - registers the page last in the navigation
   (title "What I'd do next", url_path next-steps); module docstring updated.
-* docs/decisions.md  — ADR #10: "What I'd do next" is a prose-only page,
+* docs/decisions.md  - ADR #10: "What I'd do next" is a prose-only page,
   never fictional infrastructure.
-* README.md  — pages list now includes the closing page with its scope;
+* README.md  - pages list now includes the closing page with its scope;
   repository layout line updated; pipeline consumers label aligned.
 
 Tests (real Streamlit AppTest renders, no mocks)
 ------------------------------------------------
-* tests/_next_steps_driver.py + tests/test_next_steps_page.py — 7 AppTest
+* tests/_next_steps_driver.py + tests/test_next_steps_page.py - 7 AppTest
   render checks:
     - renders with the expected header + subheaders (Where this would go /
       What changes / What stays the same);

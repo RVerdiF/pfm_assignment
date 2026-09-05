@@ -1,4 +1,4 @@
-Evidence — Card 1 (t_7131ec9c) — Streamlit foundation and pipeline bootstrap
+Evidence - Card 1 (t_7131ec9c) - Streamlit foundation and pipeline bootstrap
 Branch: wt/t_7131ec9c  (pushed to RVerdiF/pfm_assignment)
 Base:   origin/main c709816
 Commits:
@@ -8,7 +8,7 @@ Commits:
 
 Scope delivered (all criteria map to code under streamlit/ + tests + docs)
 --------------------------------------------------------------------------
-* streamlit/warehouse_bootstrap.py  — centralized bootstrap decision:
+* streamlit/warehouse_bootstrap.py  - centralized bootstrap decision:
     - PROJECT_ROOT-relative paths; resolves PFM_DUCKDB_PATH override.
     - warehouse_needs_build()/required_marts_present(): rebuild only when the
       file is missing OR the required marts (marts.fct_revenue_attribution,
@@ -23,14 +23,14 @@ Scope delivered (all criteria map to code under streamlit/ + tests + docs)
     - connection_for_app(): renders st.error + code block + actionable info;
       pages st.stop() on failure.
     - read_relation(): marts-only helper; no raw/staging/intermediate access.
-* streamlit/app.py  — entrypoint wiring navigation via st.Page/st.navigation.
-* streamlit/sections/  — overview.py (problem + pipeline + mart counts +
+* streamlit/app.py  - entrypoint wiring navigation via st.Page/st.navigation.
+* streamlit/sections/  - overview.py (problem + pipeline + mart counts +
   readiness banner), analysis.py (KPI + match/unmatched rates + UTM source
   commission + health mart + daily commission proxy, all read-only from
   marts), methodology.py (Card-3 placeholder).
-* tests/test_streamlit_bootstrap.py  — 12 new unit tests (env override, mart
+* tests/test_streamlit_bootstrap.py  - 12 new unit tests (env override, mart
   presence decision, broken-file handling, default-vs-custom path guard).
-* README.md / docs/decisions.md  — documented bootstrap + ADR #7.
+* README.md / docs/decisions.md  - documented bootstrap + ADR #7.
 
 Acceptance verification (real executions)
 -----------------------------------------
@@ -45,7 +45,7 @@ Acceptance verification (real executions)
    Headless AppTest from a fresh project copy (no warehouse, no env): the app
    ran ingestion + dbt build, then rendered the same Overview with mart
    counts; "WAREHOUSE BUILT: True" after run.
-3. dbt build succeeds before mart consumption: covered by (2) — the fresh
+3. dbt build succeeds before mart consumption: covered by (2) - the fresh
    copy's dbt build completed before the read-only connection opened (metrics
    populated).
 4. Connection used by the app is read-only: get_warehouse_connection() calls

@@ -29,3 +29,13 @@ def test_bigquery_commission_anomalies_asset_is_checked_in() -> None:
     assert asset.is_file()
     sql = asset.read_text()
     assert "analytics_core.f_commission_daily" in sql
+
+
+def test_no_em_dashes_in_source_or_docs() -> None:
+    """Ensure no Unicode em-dashes exist in tracked source, docs, or SQL files."""
+    for ext in ("*.py", "*.sql", "*.md", "*.yml", "*.yaml", "*.toml"):
+        for path in ROOT.rglob(ext):
+            if any(part.startswith(".") for part in path.parts):
+                continue
+            content = path.read_text(encoding="utf-8")
+            assert "\u2014" not in content, f"Found forbidden em-dash in {path}"

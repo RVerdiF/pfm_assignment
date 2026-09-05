@@ -11,9 +11,9 @@ Streamlit code never re-implements them.
 
 Pages follow the two assignment areas:
 
-- **Area 1 — Attribution & Data Modeling**: Overview, Attribution analysis,
+- **Area 1 - Attribution & Data Modeling**: Overview, Attribution analysis,
   Methodology and limitations.
-- **Area 2 — Investigation, Integration & Monitoring**: Investigation &
+- **Area 2 - Investigation, Integration & Monitoring**: Investigation &
   monitoring (the reported 18% gap, the production investigation queries and
   hypotheses), Data quality monitoring design, QuickBooks reconciliation
   pipeline (pure-prose, design-only pages that read no warehouse relation),
@@ -60,7 +60,7 @@ def main() -> None:
     )
 
     pages = {
-        "Area 1 — Attribution & data modeling": [
+        "Area 1 - Attribution & data modeling": [
             st.Page(
                 overview.render,
                 title="Overview",
@@ -78,7 +78,7 @@ def main() -> None:
                 url_path="methodology",
             ),
         ],
-        "Area 2 — Investigation, integration & monitoring": [
+        "Area 2 - Investigation, integration & monitoring": [
             st.Page(
                 investigation.render,
                 title="Investigation & monitoring",

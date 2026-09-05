@@ -2,15 +2,15 @@
 
 This page is the Area 1 reference in three parts:
 
-1. **Production attribution design** — how attribution should work in
+1. **Production attribution design** - how attribution should work in
    production end to end: ad-click identifiers, PostHog sessions, the
    persistence/propagation bridge, and the TrackNow contract
    (`click_id` / `affiliate_session_id`).
-2. **Sample implementation** — how the executable sample decides attribution
+2. **Sample implementation** - how the executable sample decides attribution
    (exact click-identifier matching with a temporal window and deterministic
    tie-breaks), and what the observed local results mean (numbers read from
    the same dbt relations as the analysis page).
-3. **Limitations and recommendations** — what the sample cannot support and
+3. **Limitations and recommendations** - what the sample cannot support and
    what would raise coverage.
 
 The investigation of the reported 18% production gap (six diagnostic queries
@@ -26,7 +26,7 @@ layer (int_conversion_attribution) and documented in docs/decisions.md
 
 Narrative numbers are never hard-coded: every result/recommendation quantity
 is derived on each render from the same dbt relations the analysis page
-charts — marts.mart_attribution_health (decided/match-status totals),
+charts - marts.mart_attribution_health (decided/match-status totals),
 marts.fct_revenue_attribution (valid conversions and commission), and
 intermediate.int_unmatched_conversions (the non-match reason taxonomy). The
 warehouse-specific figures in the Limitations list are read live too. A page
@@ -44,18 +44,18 @@ from sections._components import require_connection
 # Deterministic attribution rules OF THE SAMPLE IMPLEMENTATION, in the exact
 # order the intermediate model applies them. Each rule is stated in plain
 # language next to the technical term an evaluator will meet in the code.
-# These describe what the executable sample does — not the production
+# These describe what the executable sample does - not the production
 # architecture (see PRODUCTION_IDENTITY_FLOW below and ADR 3).
 METHOD_RULES = (
     (
         "1. Exact match only",
         "A conversion is attributed to a session only when the TrackNow "
-        "`click_id` equals a PostHog click identifier exactly — a `gclid`, "
+        "`click_id` equals a PostHog click identifier exactly - a `gclid`, "
         "`fbclid`, or the click id read from the landing URL. This is the "
         "sample implementation constraint: exact click-id equality is the "
         "only relationship provable in the anonymised file. No fuzzy "
         "matching, no normalization of identifier values, and no invented "
-        "bridge — the sample carries no documented identity contract, so an "
+        "bridge - the sample carries no documented identity contract, so an "
         "`affiliate_session_id` is never ASSUMED to equal a PostHog "
         "`session_id` here (that is a data limitation, not evidence that "
         "`affiliate_session_id` is irrelevant in production).",
@@ -76,8 +76,8 @@ METHOD_RULES = (
     (
         "4. Recency tie-break",
         "Among the remaining eligible sessions the most recent one wins. "
-        "When no single session wins — e.g. two sessions tie under rules 3 "
-        "and 4 — the conversion is marked ambiguous and carries no attributed "
+        "When no single session wins - e.g. two sessions tie under rules 3 "
+        "and 4 - the conversion is marked ambiguous and carries no attributed "
         "session.",
     ),
 )
@@ -104,7 +104,7 @@ DECISION_STATES = (
 )
 
 # The production identity flow, stated once as design material. It describes
-# how attribution SHOULD work when the systems are under our control — not
+# how attribution SHOULD work when the systems are under our control - not
 # what the anonymised sample can demonstrate (ADR 3 / ADR 11).
 PRODUCTION_IDENTITY_FLOW = """\
 1. Capture ad-click identifier
@@ -140,7 +140,7 @@ PRODUCTION_IDENTIFIER_ROLES = (
     ),
     (
         "`click_id_from_url`",
-        "PostHog's record of the click id read from the landing URL — the "
+        "PostHog's record of the click id read from the landing URL - the "
         "analytics-side trace of the same identifier flow.",
     ),
     (
@@ -162,7 +162,7 @@ PRODUCTION_IDENTIFIER_ROLES = (
     ),
     (
         "`click_id`",
-        "The TrackNow outbound-click identifier carried by the conversion — "
+        "The TrackNow outbound-click identifier carried by the conversion - "
         "the key that closes the loop. Must equal the `attribution_click_id` "
         "passed on the affiliate URL.",
     ),
@@ -171,7 +171,7 @@ PRODUCTION_IDENTIFIER_ROLES = (
         "Assigned by TrackNow when the affiliate link is clicked; one of the "
         "keys to attribution in the TrackNow contract. The sample cannot "
         "relate it to a PostHog session, which is a property of the "
-        "provided anonymised file — production design must document what it "
+        "provided anonymised file - production design must document what it "
         "references rather than discard it.",
     ),
     (
@@ -190,7 +190,7 @@ EDGE_CASES = (
     (
         "Missing click_id on conversion",
         "Conversion arrives with no click identifier at all.",
-        "unmatched / missing_click_id — cannot be attributed under exact "
+        "unmatched / missing_click_id - cannot be attributed under exact "
         "matching; surfaced for tracking-layer repair.",
     ),
     (
@@ -244,11 +244,11 @@ def _read_narrative_facts(connection) -> dict[str, int | float]:
 
     Every quantity comes from the same dbt relations the analysis page reads:
 
-    - marts.mart_attribution_health — the full decided population (including
+    - marts.mart_attribution_health - the full decided population (including
       denied conversions) with match-status counts.
-    - marts.fct_revenue_attribution — the revenue-valid population and its
+    - marts.fct_revenue_attribution - the revenue-valid population and its
       commission total.
-    - intermediate.int_unmatched_conversions — the diagnostic reason taxonomy
+    - intermediate.int_unmatched_conversions - the diagnostic reason taxonomy
       over every non-matched decided conversion (published under ADR 8).
 
     The reason counts always describe the same non-matched decided population
@@ -377,7 +377,7 @@ def _build_result_interpretations(
 
 def _format_date(value) -> str:
     """Format a date value from DuckDB as an ISO day (YYYY-MM-DD)."""
-    return str(value) if value is not None else "—"
+    return str(value) if value is not None else "-"
 
 
 def _limitation_notes(connection) -> list[tuple[str, str]]:
@@ -389,12 +389,12 @@ def _limitation_notes(connection) -> list[tuple[str, str]]:
     relations the rest of the page reads (never from fixed delivered-sample
     totals, which would contradict a valid PFM_DUCKDB_PATH override):
 
-    - marts.mart_attribution_health — the full decided conversion population
+    - marts.mart_attribution_health - the full decided conversion population
       (every TrackNow conversion the attribution engine decided, including
       denied rows) and its conversion-date span.
-    - marts.fct_revenue_attribution — the revenue-valid conversion count (the
+    - marts.fct_revenue_attribution - the revenue-valid conversion count (the
       subset the app's overview cites as "valid conversions").
-    - intermediate.int_unmatched_conversions — the number of conversions the
+    - intermediate.int_unmatched_conversions - the number of conversions the
       diagnostic view classifies as falling outside the PostHog sample window
       (the only window-aware quantity the consumer contract publishes; the
       session-side start date is not exposed to the app, so the boundary is
@@ -487,7 +487,7 @@ def _production_design_section() -> None:
     st.code(PRODUCTION_IDENTITY_FLOW, language=None)
     st.write("Each identifier in that flow has a defined role:")
     for identifier, role in PRODUCTION_IDENTIFIER_ROLES:
-        st.markdown(f"- **{identifier}** — {role}")
+        st.markdown(f"- **{identifier}** - {role}")
     st.write(
         "This architecture establishes two key constraints. First, `gclid` "
         "and `fbclid` captured on landing must persist alongside the PostHog "
@@ -518,10 +518,10 @@ def _method_section() -> None:
         "rules govern how orders match to PostHog sessions in this sample:"
     )
     for title, body in METHOD_RULES:
-        st.markdown(f"**{title}** — {body}")
-    st.markdown("**Outcome** — every conversion gets one of three states:")
+        st.markdown(f"**{title}** - {body}")
+    st.markdown("**Outcome** - every conversion gets one of three states:")
     for state, meaning in DECISION_STATES:
-        st.markdown(f"- **`{state}`** — {meaning}")
+        st.markdown(f"- **`{state}`** - {meaning}")
 
 
 def _results_section(facts: dict[str, int | float]) -> None:
@@ -535,7 +535,7 @@ def _results_section(facts: dict[str, int | float]) -> None:
 
     st.caption(
         f"Health mart totals over the decided population: "
-        f"{int(facts['decided']):,} conversions — {int(facts['matched']):,} "
+        f"{int(facts['decided']):,} conversions - {int(facts['matched']):,} "
         f"matched, {int(facts['unmatched']):,} unmatched, "
         f"{int(facts['ambiguous']):,} ambiguous."
     )
@@ -545,7 +545,7 @@ def _limitations_section(connection) -> None:
     st.subheader("Limitations")
     st.write("What this delivery does not claim:")
     for title, body in _limitation_notes(connection):
-        st.markdown(f"- **{title}** — {body}")
+        st.markdown(f"- **{title}** - {body}")
 
 
 def _recommendations_section(facts: dict[str, int | float]) -> None:
@@ -568,7 +568,7 @@ def _recommendations_section(facts: dict[str, int | float]) -> None:
             "exact matching."
         )
     st.markdown(
-        "- **Raise click-id coverage at the source** — "
+        "- **Raise click-id coverage at the source** - "
         "The tracking layer should treat the click id as a required field on "
         "every order." + coverage_tail
     )
@@ -581,14 +581,14 @@ def _recommendations_section(facts: dict[str, int | float]) -> None:
     else:
         propagate_tail = ""
     st.markdown(
-        "- **Propagate identifiers consistently** — "
+        "- **Propagate identifiers consistently** - "
         "Whatever id is captured at click time must survive redirects and be "
         "written into the session record, not only into the URL."
         + propagate_tail
     )
 
     st.markdown(
-        "- **Persist identifiers between session and conversion** — "
+        "- **Persist identifiers between session and conversion** - "
         "The generic URL click id exists only on the session side; converting "
         "flows should carry the same identifier into the order payload so the "
         "two systems share one key namespace."
@@ -602,7 +602,7 @@ def _recommendations_section(facts: dict[str, int | float]) -> None:
     else:
         window_tail = ""
     st.markdown(
-        "- **Widen and monitor the PostHog window** — "
+        "- **Widen and monitor the PostHog window** - "
         "A production window must start before the earliest order and be "
         "monitored so coverage loss is visible continuously, not discovered "
         "at report time." + window_tail

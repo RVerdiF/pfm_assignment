@@ -1,4 +1,4 @@
-# Commission pipeline — data quality monitoring design
+# Commission pipeline - data quality monitoring design
 
 **Scope: design only.** Nothing in this document is provisioned or implemented
 in this repository: there is no Airbyte connection, no BigQuery deployment, no
@@ -22,7 +22,7 @@ Exactly five checks cover the commission pipeline. Each check names what it
 validates, its metric, its threshold, its severity, its implementation, and
 how on-call is notified.
 
-### Check 1 — Commission source freshness
+### Check 1 - Commission source freshness
 
 | | |
 |---|---|
@@ -31,31 +31,31 @@ how on-call is notified.
 | **Threshold (example, configurable)** | **P1**: no new data by 10:00 UTC on the expected delivery day (daily financial reporting is unavailable). **P2**: arrival more than 2h later than the SLA, before the critical cutoff. |
 | **Severity** | **P1** when the daily financial reporting is unavailable; P2 for partial delays inside the buffer window. |
 | **Implementation** | dbt source freshness on the commission source, or a scheduled query over a pipeline metadata/ingestion-timestamp table; alert when freshness exceeds the threshold. |
-| **On-call action** | Verify the commission integration sync, the source itself, the BigQuery load, and the last dbt run — in that order. |
+| **On-call action** | Verify the commission integration sync, the source itself, the BigQuery load, and the last dbt run - in that order. |
 
-### Check 2 — Duplicate / invalid TrackNow conversions
+### Check 2 - Duplicate / invalid TrackNow conversions
 
 | | |
 |---|---|
 | **What it validates** | The grain of the conversion table: one row per conversion, primary conversion identifier present, statuses within the known set. |
 | **Metric** | Count of duplicate `tracknow_order_id`; count of null conversion IDs; count of statuses outside the accepted set. |
 | **Threshold** | Any duplicate ID > 0 → alert. Any null conversion ID > 0 → alert. Any invalid status > 0 → alert. |
-| **Severity** | **P1** — duplicates can double-count revenue and commission, and silently overstate both. |
+| **Severity** | **P1** - duplicates can double-count revenue and commission, and silently overstate both. |
 | **Implementation** | dbt tests: `unique` and `not_null` on `tracknow_order_id`, `accepted_values` on status, plus a singular test asserting the business grain. |
 | **On-call action** | The mart publication is blocked or the run is marked failed; on-call decides whether to quarantine the batch and re-run ingestion. |
 
-### Check 3 — Attribution unmatched-rate regression
+### Check 3 - Attribution unmatched-rate regression
 
 | | |
 |---|---|
 | **What it validates** | Attribution quality has not regressed: conversions keep joining to tracking sessions at the expected rate. |
 | **Metric** | `unmatched_rate = unmatched_conversions / total_conversions`, from `mart_attribution_health`. |
-| **Threshold** | **P2** if the unmatched rate exceeds 25%, or rises more than 5 percentage points above the trailing 7-day baseline. The ~18% figure reported by the assignment is the observed production gap, **not** a hardcoded SLA — the baseline is computed from recent history, and thresholds are configuration. |
+| **Threshold** | **P2** if the unmatched rate exceeds 25%, or rises more than 5 percentage points above the trailing 7-day baseline. The ~18% figure reported by the assignment is the observed production gap, **not** a hardcoded SLA - the baseline is computed from recent history, and thresholds are configuration. |
 | **Severity** | **P2** by default. Escalates to **P1** if the unmatched rate exceeds 40% (hard ceiling) or reporting for a critical channel goes dark. |
 | **Implementation** | Scheduled query over `mart_attribution_health` in production. Broken down by: total, channel, firm, and device/browser where available. |
 | **On-call action** | Compare the rate against the baseline, check whether a specific channel or identifier source regressed, and hand off to the tracking/integration owner if the capture side broke. |
 
-### Check 4 — Commission reconciliation variance
+### Check 4 - Commission reconciliation variance
 
 | | |
 |---|---|
@@ -66,7 +66,7 @@ how on-call is notified.
 | **Implementation** | Monitoring query over `int_quickbooks_tracknow_reconciliation` (output of the reconciliation design in `docs/quickbooks_reconciliation_design.md`). |
 | **On-call action** | The alert carries firm, period, both values, and both deltas, with a link to the reconciliation query for investigation; finance is notified for P1/P2. |
 
-### Check 5 — Firm / accounting mapping coverage
+### Check 5 - Firm / accounting mapping coverage
 
 | | |
 |---|---|
@@ -77,11 +77,11 @@ how on-call is notified.
 | **Implementation** | dbt test / monitoring query over `dim_firm_accounting_mapping` and the reconciliation output (left-anti join for unmapped keys). |
 | **On-call action** | Add the missing mapping (the bridge is customer-id → `firm_id`, never a name join), then re-run reconciliation. |
 
-### Which check to build first — and why
+### Which check to build first - and why
 
 **Check 1 (Commission source freshness) first.**
 
-- If the source data has not arrived, every downstream check is unreliable —
+- If the source data has not arrived, every downstream check is unreliable -
   freshness is the precondition for the other four.
 - It is simple to implement (one freshness query on one relation).
 - It detects failure early, cutting time-to-diagnosis.
