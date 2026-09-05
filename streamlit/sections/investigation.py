@@ -116,11 +116,17 @@ where t.created_date >= date_sub(current_date(), interval 30 day);""",
 select
   bridge.acquired_channel,   -- 'google' | 'meta' | 'other', from the bridge
   count(*)                                 as conversions,
-  countif(bridge.session_id is null)       as unmatched,
-  countif(bridge.session_id is null) / count(*) as unmatched_rate
+  -- unmatched = no matching PostHog session, consistent with Queries 1/4:
+  -- a bridge row whose session_id no longer exists in PostHog is unmatched,
+  -- so PostHog is joined through the bridge and rows without a live
+  -- PostHog session (ph.session_id is null) are counted as unmatched
+  countif(ph.session_id is null)           as unmatched,
+  countif(ph.session_id is null) / count(*) as unmatched_rate
 from tracknow.conversions t
 left join attribution.bridge bridge
   on bridge.click_id = t.click_id
+left join posthog.sessions ph
+  on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
 group by bridge.acquired_channel
 order by unmatched desc;""",

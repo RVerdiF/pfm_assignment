@@ -25,7 +25,9 @@ the single ADR-8 diagnostic intermediate view).
 ## What is not implemented
 
 - No real BigQuery deployment, Airbyte connection, or QuickBooks API access.
-- No production data — every number shown comes from the anonymised sample.
+- No production data is delivered or queried — all executable metrics come
+  from the anonymised sample. The 18% production-gap figure is an
+  assignment-provided reported premise, not a number computed here.
 - No actual alerting infrastructure (no Slack/paging integration, no dbt
   Cloud job, no Cloud Monitoring alerts).
 
