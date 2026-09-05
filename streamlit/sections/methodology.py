@@ -228,21 +228,36 @@ order by unmatched desc;""",
     ),
     (
         "Query 4 — Gap by device / browser / country",
-        "Look for privacy-driven patterns: Safari/iOS, mobile, specific "
-        "regions, consent-banner outcomes, and browser privacy features that "
-        "suppress client-side collection.",
+        "Look for privacy-driven patterns behind the unmatched conversions: "
+        "Safari/iOS, mobile, specific regions, consent-banner outcomes, and "
+        "browser privacy features that suppress client-side collection. The "
+        "PostHog session is missing by definition on the unmatched rows, so "
+        "every dimension is sourced from the TrackNow outbound-click record "
+        "(the click contract, as in query 6) — never from the PostHog "
+        "session row, and without inventing `affiliate_session_id` = "
+        "`PostHog.session_id`.",
         """\
+-- The unmatched cohort has no PostHog session by definition, so the
+-- breakdown dimensions come from the outbound-click record (the click
+-- contract), never from `ph.*`.
 select
-  ph.device_type, ph.browser, ph.os, ph.country,
-  count(*)                                   as conversions,
-  countif(ph.session_id is null)             as unmatched,
-  countif(ph.session_id is null) / count(*)  as unmatched_rate
+  k.device_type,
+  k.browser,
+  k.os,
+  k.country_code,
+  k.consent_state,
+  count(*) as unmatched_conversions
 from tracknow.conversions t
-left join posthog.sessions ph
-  on t.attributed_session_id = ph.session_id
+join tracknow.outbound_clicks k
+  on k.click_ref = t.conversion_click_ref
 where t.created_date >= date_sub(current_date(), interval 30 day)
-group by 1, 2, 3, 4
-order by unmatched_rate desc;""",
+  and not exists (          -- the unmatched cohort itself
+    select 1
+    from posthog.sessions ph
+    where ph.session_id = t.attributed_session_id
+  )
+group by 1, 2, 3, 4, 5
+order by unmatched_conversions desc;""",
     ),
     (
         "Query 5 — Conversion lag (cross-session loss)",
@@ -315,8 +330,9 @@ INVESTIGATION_HYPOTHESES = (
         "The PostHog `distinct_id` changes before purchase (new device, "
         "cleared cookies, incognito), so the converting identity never saw "
         "the ad click.",
-        "**Test:** breakdown of unmatched conversions by browser/device and "
-        "identity-reset analysis (query 4).",
+        "**Test:** breakdown of unmatched conversions by the browser/device "
+        "recorded at the outbound click (query 4), plus identity-reset "
+        "analysis over the identities that do resolve.",
         "**Fix:** identity stitching on login/account identifier, keeping an "
         "anonymous-to-known mapping so pre-login sessions survive.",
     ),
@@ -334,9 +350,10 @@ INVESTIGATION_HYPOTHESES = (
         "The TrackNow conversion happens, but the PostHog session is never "
         "recorded client-side (consent not granted, blocker, script "
         "failure).",
-        "**Test:** unmatched conversions by browser/country/privacy surface "
-        "and a comparison of server-side TrackNow volume against client-side "
-        "analytics volume (queries 4 and 1).",
+        "**Test:** unmatched conversions broken down by the browser/country/"
+        "consent state recorded at the outbound click (query 4), and a "
+        "comparison of server-side TrackNow volume against client-side "
+        "analytics volume over time (query 1).",
         "**Fix:** capture the critical identifiers server-side or route "
         "analytics through a first-party tracking endpoint.",
     ),

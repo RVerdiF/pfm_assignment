@@ -125,3 +125,17 @@ Commit
 f402420 docs(narrative): separate reported production gap from sample match rate (Card 1)
 12 files changed, 868 insertions(+), 110 deletions(-)
 Author: rafael.freitas <rafaelverdifreitas@hotmail.com>
+
+Review round 2 (2026-09-05) — Query 4 correction after changes_requested:
+- Query 4 rewritten: the unmatched cohort is profiled by device/browser/os/
+  country_code/consent_state taken from tracknow.outbound_clicks (the click
+  contract, same join shape as Query 6), isolated with NOT EXISTS on
+  posthog.sessions via t.attributed_session_id. No ph.* dimension, no
+  invented affiliate_session_id = PostHog.session_id.
+- Hypotheses 3 and 5 test references updated to match the new query shape.
+- Regression added: tests/test_narrative_alignment.py::
+  test_investigation_query_4_never_sources_dimensions_from_the_missing_session
+  (pins: no ph.* dimensions, no identity bridge, cohort predicate present,
+  dimensions from outbound_clicks, prose states the constraint).
+- Validation: pytest 59/59 PASS (dbt build 74/74 PASS).
+- Commit: see git log (fix after review round 1).

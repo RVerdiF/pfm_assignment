@@ -141,3 +141,40 @@ def test_reported_gap_callout_renders_with_sample_rate_from_marts() -> None:
         "These numbers describe different populations and should not be "
         "compared as if one validates the other" in info_text
     )
+
+
+def test_investigation_query_4_never_sources_dimensions_from_the_missing_session() -> None:
+    """Regression for review round 1: Query 4 must be internally consistent.
+
+    The unmatched cohort has no PostHog session by definition, so the query
+    that profiles it by device/browser/country must not take any dimension
+    from the PostHog row that is NULL for exactly that population — and must
+    not invent an identity bridge (affiliate_session_id = PostHog.session_id)
+    to obtain one.
+    """
+    from sections.methodology import INVESTIGATION_QUERIES
+
+    title, purpose, sketch = next(
+        (q for q in INVESTIGATION_QUERIES if q[0].startswith("Query 4"))
+    )
+    lowered = sketch.lower()
+
+    # No dimension may be read from the PostHog row.
+    assert "ph.device_type" not in lowered
+    assert "ph.browser" not in lowered
+    assert "ph.os" not in lowered
+    assert "ph.country" not in lowered
+    # No identity bridge is invented to source the dimensions.
+    assert "affiliate_session_id = ph.session_id" not in lowered
+    assert "on ph.session_id = t.affiliate_session_id" not in lowered
+    # The sketch actually isolates the unmatched cohort.
+    assert "attributed_session_id" in lowered
+    # Dimensions come from the pre-match outbound-click record (click
+    # contract), matching the stated purpose of the query.
+    assert "outbound_clicks" in lowered
+    for dimension in ["device_type", "browser", "country"]:
+        assert dimension in lowered
+    # The prose tells the reader where the dimensions come from and names the
+    # constraint.
+    assert "outbound-click" in purpose.lower()
+    assert "missing by definition" in purpose.lower()
