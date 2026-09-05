@@ -72,7 +72,7 @@ INVESTIGATION_QUERIES = (
 -- resolved a session_id: TrackNow LEFT JOIN bridge LEFT JOIN PostHog,
 -- unmatched = ph.session_id IS NULL.
 select
-  t.conversion_date,
+  t.created_date as conversion_date,
   count(*)                                                      as conversions,
   countif(ph.session_id is null)                                as unmatched,
   countif(ph.session_id is null) / count(*)                     as unmatched_rate
@@ -82,8 +82,8 @@ left join attribution.bridge bridge
 left join posthog.sessions ph
   on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-group by t.conversion_date
-order by t.conversion_date;""",
+group by t.created_date
+order by t.created_date;""",
     ),
     (
         "Query 2 - Identifier coverage",
@@ -215,7 +215,7 @@ ROOT_CAUSE_STATEMENT = (
     "The provided anonymised sample does not contain a deterministic "
     "cross-system identity overlap. The investigation above is designed to "
     "isolate whether the gap comes from identifier capture, propagation, "
-    "identity persistence, client-side collection, or ingestion latency."
+    "identity persistence, or client-side collection."
 )
 
 
