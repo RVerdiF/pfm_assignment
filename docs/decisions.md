@@ -262,3 +262,38 @@ cause, or as a reason to redesign production attribution. Conversely, the
 18% premise is never recomputed from the Excel data. The local SQL keeps its
 exact-match logic — no fuzzy bridge is introduced to fabricate matches — and
 the sample's results continue to reconcile with the published marts.
+
+---
+
+## 12. "What I'd do next" is a prose-only page, never fictional infrastructure
+
+**Context:** Card 4 asks the walkthrough to close with a short section on how
+the local solution could evolve to a production GCP architecture. The
+assignment explicitly forbids implementing BigQuery, Terraform, CI/CD, or any
+other production infrastructure, and forbids presenting fictional
+infrastructure as if it were implemented.
+
+**Decision:** The closing "What I'd do next" page is pure prose. It states the
+main message (`This implementation is intentionally local and self-contained.
+In production, I would preserve the same transformation contracts while moving
+execution and storage to managed GCP services.`), shows the one-line future
+architecture (`Source -> Cloud Storage/API -> BigQuery raw -> dbt -> BigQuery
+marts -> Streamlit/BI`) with its supporting automation, and splits the
+evolution into *what changes* (BigQuery as the managed warehouse, dbt-bigquery
+as the adapter, Cloud Storage as the landing zone, Cloud Run Jobs / Cloud
+Build for execution and scheduling, Terraform for datasets/service
+accounts/IAM/buckets with least privilege, GitHub Actions for CI/CD, Cloud
+Monitoring for freshness/failure/match-rate/unmatched-reason observability)
+and *what stays the same* (the dbt transformation contracts and layered
+shape, the read-only consumer posture, and the BigQuery-compatible SQL assets
+already shipped in `sql/bigquery/` — the commission anomaly query over
+`analytics_core.f_commission_daily` and the optional health-mart read). The
+page reads no warehouse relation and renders no chart, and its closing note
+makes the boundary explicit: nothing on it exists in this repository yet.
+
+**Consequences:** The walkthrough ends with an honest, short,
+architecture-oriented answer to "what next" without expanding the assignment's
+scope. The change-vs-constant split makes it clear that the value to preserve
+is the dbt transformation design, not the local execution details. Because
+the page is prose-only, it adds no new relation to the consumer contract and
+no fictional resource to the repository.

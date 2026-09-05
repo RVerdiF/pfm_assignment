@@ -104,10 +104,13 @@ WHAT_STAYS = (
         "never re-implements attribution or business joins.",
     ),
     (
-        "Existing BigQuery-shaped asset",
-        "The repository already ships `sql/bigquery/attribution_health.sql`, "
-        "a BigQuery-compatible read over `marts.mart_attribution_health`; it "
-        "shows the mart contract is already consumable in that shape.",
+        "Existing BigQuery-shaped assets",
+        "The repository already ships BigQuery-compatible SQL assets in "
+        "`sql/bigquery/`: `commission_anomalies.sql`, a Standard SQL query "
+        "over the authoritative production `analytics_core.f_commission_daily` "
+        "showing the anomaly-detection contract is consumable in that shape, "
+        "and `optional_attribution_health.sql`, a read over the local "
+        "`marts.mart_attribution_health` mart.",
     ),
 )
 

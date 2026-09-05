@@ -496,6 +496,44 @@ def _render_commission(connection) -> None:
         st.dataframe(proxy_table, width="stretch", hide_index=True)
 
 
+def _render_production_vs_proxy(connection) -> None:
+    st.subheader("Production commission source vs local sample proxy")
+    st.caption(
+        "The pipeline has two commission sources. Production: a Google Sheet "
+        "maintained by the business, ingested by Airbyte into BigQuery, then "
+        "transformed by dbt. The authoritative reporting table is "
+        "`analytics_core.f_commission_daily` (see `sql/bigquery/commission_anomalies.sql`). "
+        "The assignment sample does NOT include that Google Sheet, so the local "
+        "app uses `marts.fct_commission_daily_local`, a proxy derived from the "
+        "TrackNow `referral_bonus_gbp` field, to demonstrate reconciliation "
+        "and visualization only. It is **not** the production source."
+    )
+
+    with st.expander("Production pipeline shape", expanded=False):
+        raw_schema = "raw"
+        st.code(
+            "Google Sheet commission\n"
+            "        |\n"
+            "        v\n"
+            f"Airbyte -> BigQuery {raw_schema}.google_sheets_commission_daily\n"
+            "        |\n"
+            "        v\n"
+            "dbt staging (stg_commission_daily)\n"
+            "        |\n"
+            "        v\n"
+            "intermediate (int_tracknow_commission_reconciliation)\n"
+            "        |\n"
+            "        v\n"
+            "marts (analytics_core.f_commission_daily)",
+            language=None,
+        )
+
+    st.caption(
+        "`marts.fct_commission_daily_local` remains available below as a "
+        "clearly labelled local proxy for the daily commission visualization."
+    )
+
+
 def render() -> None:
     st.header("Attribution analysis")
 
@@ -505,3 +543,4 @@ def render() -> None:
     _render_unmatched_diagnosis(connection)
     _render_marketing_attribution(connection)
     _render_commission(connection)
+    _render_production_vs_proxy(connection)
