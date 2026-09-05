@@ -9,7 +9,9 @@ required relation is absent, it runs the canonical pipeline (ingestion then
 read-only. All attribution decisions and business joins live in dbt; the
 Streamlit code never re-implements them.
 
-Launch from the repository root:
+Pages: Overview, Attribution analysis, Methodology and limitations, and the
+closing "What I'd do next" (a pure-prose production-evolution outline; it
+reads no warehouse relation). Launch from the repository root:
 
     streamlit run streamlit/app.py
 """
@@ -26,7 +28,7 @@ STREAMLIT_DIR = Path(__file__).resolve().parent
 if str(STREAMLIT_DIR) not in sys.path:
     sys.path.insert(0, str(STREAMLIT_DIR))
 
-from sections import analysis, methodology, overview  # noqa: E402
+from sections import analysis, methodology, next_steps, overview  # noqa: E402
 
 
 def main() -> None:
@@ -52,6 +54,11 @@ def main() -> None:
             methodology.render,
             title="Methodology and limitations",
             url_path="methodology",
+        ),
+        st.Page(
+            next_steps.render,
+            title="What I'd do next",
+            url_path="next-steps",
         ),
     ]
     navigation = st.navigation(pages)
