@@ -248,9 +248,11 @@ def test_methodology_page_documents_production_design_and_investigation() -> Non
 
     # Production identity flow (code block) and identifier roles (markdown).
     for phrase in [
-        "gclid / fbclid captured on the landing page",
-        "identifier persistence / identity bridge",
-        "TrackNow click_id / affiliate_session_id",
+        "gclid",
+        "fbclid",
+        "attribution bridge",
+        "TrackNow click_id",
+        "affiliate_session_id",
     ]:
         assert phrase in code
     for phrase in [

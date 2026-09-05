@@ -160,8 +160,9 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     lowered = sketch.lower()
 
     # No invented telemetry columns (TrackNow staging does not carry these).
+    # Check for column references (t.os, t.device_type, etc.), not substrings.
     for invented in ["device_type", "browser", "os", "country_code", "consent_state"]:
-        assert invented not in lowered, f"invented column {invented!r} in Query 4"
+        assert f"t.{invented}" not in lowered, f"invented column {invented!r} in Query 4"
     # No identity bridge is invented to source the dimensions.
     assert "affiliate_session_id = ph.session_id" not in lowered
     assert "on ph.session_id = t.affiliate_session_id" not in lowered

@@ -316,7 +316,7 @@ left join attribution.bridge bridge
 left join posthog.sessions ph
   on ph.session_id = bridge.session_id
 where t.created_date >= date_sub(current_date(), interval 30 day)
-  and ph.session_id is null     -- the unmatched cohort itself
+  and ph.session_id is null     -- unmatched cohort: session not in PostHog
 group by 1, 2, 3
 order by unmatched_conversions desc;""",
     ),
