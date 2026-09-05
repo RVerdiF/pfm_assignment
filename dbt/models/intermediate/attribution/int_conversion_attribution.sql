@@ -5,12 +5,19 @@
 -- int_tracknow_attribution_candidates appears exactly once (denied conversions
 -- are kept: excluding them is a revenue-layer decision, not an audit one).
 --
--- Attribution is decided ONLY through an EXACT equality of the TrackNow
--- click_id and a PostHog click identifier value (gclid, fbclid, or
--- click_id_from_url) emitted by int_posthog_attribution_candidates. No fuzzy
--- matching, no invented conversion time, and no affiliate_session_id =
--- session_id bridge is used. The decision is fully deterministic and is
--- described by four ordered rules:
+-- SAMPLE IMPLEMENTATION CONSTRAINT, NOT THE PRODUCTION ARCHITECTURE. For the
+-- provided sample, attribution is executed only through exact equality between
+-- the TrackNow click_id and a PostHog click identifier value (gclid, fbclid,
+-- or click_id_from_url) emitted by int_posthog_attribution_candidates, because
+-- no documented cross-system bridge is available in the delivered data. This
+-- is the only relationship provable in the anonymised sample; production
+-- attribution would use an explicit identity contract instead (identifier
+-- capture at the landing, persistence with the PostHog session/distinct_id,
+-- propagation onto the affiliate outbound click, and the TrackNow contract
+-- including affiliate_session_id — see docs/decisions.md ADR 3 and ADR 11).
+-- No fuzzy matching, no invented conversion time, and no assumed
+-- affiliate_session_id = session_id bridge is used. The decision is fully
+-- deterministic and is described by four ordered rules:
 --
 --   1. Exact match       a conversion is attributable only when its click_id
 --                        equals a PostHog identifier value. Conversions

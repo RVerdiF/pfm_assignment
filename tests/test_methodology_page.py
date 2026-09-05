@@ -195,7 +195,9 @@ def test_methodology_page_renders_with_real_warehouse() -> None:
     at = _render()
     assert not at.exception, at.exception
     headers = {h.value for h in at.subheader}
-    assert "Attribution method" in headers
+    assert "Production attribution design" in headers
+    assert "Sample implementation" in headers
+    assert "How I would investigate the reported 18% attribution gap" in headers
     assert "Interpreting the observed results" in headers
     assert "Limitations" in headers
     assert "Recommendations" in headers
@@ -233,6 +235,84 @@ def test_methodology_page_lists_limitations_and_recommendations() -> None:
         "Widen and monitor the PostHog window",
     ]:
         assert phrase in body
+
+
+def test_methodology_page_documents_production_design_and_investigation() -> None:
+    """Area 1 + Area 2 material: production design, 6 queries, 6 hypotheses."""
+    at = _render()
+    assert not at.exception, at.exception
+    body = _body(at)
+    # The production identity flow is rendered as a code block (st.code),
+    # so its phrases are checked against the rendered code payloads.
+    code = " ".join(str(c.value) for c in at.code)
+
+    # Production identity flow (code block) and identifier roles (markdown).
+    for phrase in [
+        "gclid / fbclid captured on the landing page",
+        "identifier persistence / identity bridge",
+        "TrackNow click_id / affiliate_session_id",
+    ]:
+        assert phrase in code
+    for phrase in [
+        "`click_id`",
+        "`affiliate_session_id`",
+        "keys to attribution",
+        "without assuming that it equals",
+    ]:
+        assert phrase in body
+
+    # The six diagnostic queries (titles as rendered by the section).
+    for phrase in [
+        "Query 1 — Daily baseline of the gap",
+        "Query 2 — Identifier coverage",
+        "Query 3 — Gap by channel",
+        "Query 4 — Gap by device / browser / country",
+        "Query 5 — Conversion lag (cross-session loss)",
+        "Query 6 — TrackNow propagation audit",
+    ]:
+        assert phrase in body
+
+    # The six hypotheses, each with a Test and a Fix bullet.
+    for phrase in [
+        "Hypothesis 1 — Identifier lost before TrackNow",
+        "Hypothesis 2 — Cross-session conversion",
+        "Hypothesis 3 — Cross-device / cookie reset / incognito",
+        "Hypothesis 4 — Redirect stripping / affiliate integration issue",
+        "Hypothesis 5 — Consent / ad blocker / PostHog collection gap",
+        "Hypothesis 6 — Ingestion latency / freshness",
+        "**Test:**",
+        "**Fix:**",
+    ]:
+        assert phrase in body
+
+    # The root-cause boundary is stated, and the 18% is framed as premise.
+    assert (
+        "The exact production root cause cannot be proven from the delivered "
+        "anonymised sample" in body
+    )
+    assert "18% of TrackNow" in body
+    assert "assignment premise" in body
+
+
+def test_methodology_narrative_does_not_claim_sample_equals_production() -> None:
+    """Guard: no page prose may equate the sample with the production gap.
+
+    Card 1 reframe: the sample's 0% match rate is a property of the
+    anonymised extract; the 18% is a reported production premise. The old
+    narrative claimed the sample proved things about production (or that a
+    better join would not help); those claims must not return.
+    """
+    at = _render()
+    assert not at.exception, at.exception
+    body = _body(at)
+    for banned in [
+        "not places where a better join would help",
+        "Production unmatched rate = 100%",
+        "the honest result, not a missing step",
+        "production root cause is",
+        "the production unmatched rate is",
+    ]:
+        assert banned not in body
 
 
 def test_methodology_prose_reconciles_with_live_marts() -> None:
@@ -328,7 +408,7 @@ def test_methodology_override_missing_diagnostic_view_fails_at_bootstrap(
         # "Methodology and limitations" intro header appears but no method /
         # results / recommendations sections follow.
         assert all(
-            h.value != "Attribution method"
+            h.value != "Sample implementation"
             for h in at.subheader
         )
         # The readable error names the missing diagnostic view (the accessor

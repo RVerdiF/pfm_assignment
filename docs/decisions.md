@@ -35,19 +35,33 @@ assume DataFrame-import defaults trimmed them. The behavior is pinned by tests
 
 ---
 
-## 3. Attribution uses exact click-ID matching, never fuzzy
+## 3. The sample uses exact click-ID matching; production attribution needs a broader identity contract
 
 **Context:** TrackNow orders carry `click_id`; PostHog sessions carry `gclid`,
-`fbclid`, and `click_id_from_url`.
+`fbclid`, and `click_id_from_url`. The delivered workbook is an anonymised
+sample whose identifiers show no deterministic cross-system overlap, and the
+assignment also reports that 18% of TrackNow conversions in production lack a
+matching PostHog session.
 
-**Decision:** A conversion is attributed only through an **exact** equality
-between its `click_id` and a PostHog identifier value. No fuzzy matching, no
-normalization of identifier values (case preserved), and no invented join key
-(`affiliate_session_id` is never assumed to equal a PostHog `session_id`).
+**Decision:** For the provided sample, a conversion is attributed only through
+an **exact** equality between its `click_id` and a PostHog identifier value.
+No fuzzy matching and no normalization of identifier values (case preserved).
+Exact click-id equality is the only relationship that is *provable* in the
+delivered file; the sample implementation constraint must not be read as the
+production architecture. In production the identity contract must be
+explicitly designed: ad-click identifiers (`gclid`/`fbclid`) are captured at
+the landing and persisted with the PostHog `distinct_id`/session, propagated
+onto the affiliate outbound click, and carried into TrackNow so `click_id` can
+close the loop. `affiliate_session_id` is part of that TrackNow contract —
+the sample's inability to relate it to a PostHog `session_id` does **not**
+prove it irrelevant. Without a documented contract, no
+`affiliate_session_id = PostHog.session_id` equality is assumed.
 
-**Consequences:** Attribution is deterministic and auditable. Conversions
-without an exact match are not forced into a match; they are explained by
-`int_unmatched_conversions` with a deterministic `unmatched_reason`.
+**Consequences:** Attribution in the executable sample is deterministic and
+auditable; conversions without an exact match are not forced into a match and
+are explained by `int_unmatched_conversions` with a deterministic
+`unmatched_reason`. The local zero-match outcome is a property of the
+anonymised sample, never a restatement of the production 18% gap (see ADR 11).
 
 ---
 
@@ -212,3 +226,39 @@ the pages). Local development is unchanged (`pip install -e ".[consumer,dev]"`
 reads `pyproject.toml`). Keeping `requirements.txt` in sync with
 `pyproject.toml` is a manual step documented in the README; future
 dependency bumps must be validated in both manifests.
+
+---
+
+## 11. The reported production gap and the sample's match rate are different populations
+
+**Context:** The assignment reports, as a production fact, that 18% of
+TrackNow conversions in the last 30 days have no matching PostHog session.
+The delivered Excel sample is an anonymised, bounded extract (100 TrackNow
+conversions, 200 PostHog sessions) in which no TrackNow `click_id` equals any
+PostHog identifier value, so the local exact-match engine attributes 0% of
+it. Treating the two numbers as one population conflates the exercise premise
+with a property of the sample.
+
+**Decision:** The two figures are always presented as separate populations:
+
+- **Reported production issue** — an input premise from the assignment:
+  18% of TrackNow conversions in the last 30 days have no matching PostHog
+  session. It is cited as the investigation subject, never re-derived from
+  the sample.
+- **Observed deterministic match rate in the provided anonymised sample** —
+  a factual property of the local executable model under exact matching,
+  measured from the dbt marts on every render.
+
+The Streamlit walkthrough and the dbt documentation state that these numbers
+describe different populations and must not be compared as if one validated
+the other. Production attribution design (identifier capture, persistence,
+propagation, the TrackNow contract including `affiliate_session_id`, and the
+investigation of the reported gap) is documented as design material, distinct
+from what the sample demonstrates.
+
+**Consequences:** No page of the walkthrough presents the sample's 0% match
+rate as the production unmatched rate, as evidence about the production root
+cause, or as a reason to redesign production attribution. Conversely, the
+18% premise is never recomputed from the Excel data. The local SQL keeps its
+exact-match logic — no fuzzy bridge is introduced to fabricate matches — and
+the sample's results continue to reconcile with the published marts.

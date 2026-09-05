@@ -35,9 +35,33 @@ def test_analysis_page_renders_with_real_warehouse() -> None:
     assert not at.exception, at.exception
     headers = {h.value for h in at.subheader}
     assert "Attribution overview" in headers
-    assert "Why conversions are not attributed" in headers
+    assert "What the provided sample can diagnose" in headers
     assert "Marketing attribution" in headers
     assert "Revenue and commission" in headers
+
+
+def test_analysis_page_diagnosis_is_sample_scoped() -> None:
+    """Card 1 reframe guard: the diagnosis panel describes only the sample.
+
+    The page must not claim the sample's identifiers prove the production
+    root cause, and must not resurrect the old 'better join'/'honest result'
+    narrative. The reported 18% production gap belongs to the Overview and
+    Methodology pages as an assignment premise.
+    """
+    at = _render()
+    assert not at.exception, at.exception
+    body = " ".join(str(el.value) for el in at.markdown)
+    captions = " ".join(str(c.value) for c in at.caption)
+    # Sample-scoped framing is present.
+    assert "diagnoses the anonymised sample" in captions
+    assert "property of this sample" in body
+    # The old universal-claim narrative is gone.
+    for banned in [
+        "the honest result, not a missing step",
+        "not places where a better join would help",
+    ]:
+        assert banned not in body
+        assert banned not in captions
 
 
 def test_analysis_page_kpis_reconcile_to_marts() -> None:
