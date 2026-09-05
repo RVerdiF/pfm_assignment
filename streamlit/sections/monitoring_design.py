@@ -113,16 +113,12 @@ FIRST_CHECK_NOTE = (
     "can silently overstate revenue."
 )
 
-ALERT_FLOW = """\
-data source / pipeline
-    ↓
-dbt build + monitoring queries
-    ↓
-monitoring table
-    ↓
-threshold evaluation
-    ↓
-notification
+ALERT_FLOW_MERMAID = """\
+flowchart TD
+    A["data source / pipeline"] --> B["dbt build + monitoring queries"]
+    B --> C["monitoring table"]
+    C --> D["threshold evaluation"]
+    D --> E["notification"]
 """
 
 ROUTING_NOTE = (
@@ -151,18 +147,13 @@ run_id
 suggested first action
 """
 
-ARCHITECTURE = """\
-Airbyte / source loads
-        ↓
-BigQuery raw
-        ↓
-dbt tests + monitoring models
-        ↓
-monitoring mart
-        ↓
-scheduled evaluation
-        ↓
-Slack / paging
+ARCHITECTURE_MERMAID = """\
+flowchart TD
+    A["Airbyte / source loads"] --> B["BigQuery raw"]
+    B --> C["dbt tests + monitoring models"]
+    C --> D["monitoring mart"]
+    D --> E["scheduled evaluation"]
+    E --> F["Slack / paging"]
 """
 
 ARCHITECTURE_NOTE = (
@@ -202,7 +193,7 @@ def render() -> None:
     st.markdown(FIRST_CHECK_NOTE)
 
     st.subheader("Alerting / on-call")
-    st.code(ALERT_FLOW, language=None)
+    st.mermaid_chart(ALERT_FLOW_MERMAID, width="stretch")
     st.write(ROUTING_NOTE)
     st.table(
         {
@@ -215,7 +206,7 @@ def render() -> None:
     st.code(ALERT_PAYLOAD, language=None)
 
     st.subheader("Monitoring architecture")
-    st.code(ARCHITECTURE, language=None)
+    st.mermaid_chart(ARCHITECTURE_MERMAID, width="stretch")
     st.write(ARCHITECTURE_NOTE)
 
     st.caption(NOT_IMPLEMENTED_NOTE)
