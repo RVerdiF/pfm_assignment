@@ -135,6 +135,15 @@ def test_investigation_query_5_respects_the_documented_tracknow_grain() -> None:
     assert "date_diff(" in lowered  # executable part stays at date grain
     assert "date_diff(t.conversion_at" not in lowered  # no DATE/TIMESTAMP mix
 
+    # Live-session existence semantics (same as Queries 1-4): the
+    # no_posthog_session flag tests ph.session_id after the LEFT JOIN —
+    # a matched row with a null timestamp is a matched session with
+    # unavailable lag, not a missing session.
+    assert "ph.session_id is null as no_posthog_session" in lowered
+    assert (
+        "ph.session_start_at is null as no_posthog_session" not in lowered
+    )
+
 
 def test_investigation_page_renders_hypotheses_with_tests_and_fixes() -> None:
     at = _render()

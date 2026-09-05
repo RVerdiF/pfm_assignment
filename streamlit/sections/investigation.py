@@ -195,7 +195,11 @@ select
                                                            as session_lag_days,
   t.created_date,
   ph.session_start_at as winning_session_start,
-  ph.session_start_at is null as no_posthog_session
+  -- Live-session semantics (same as Queries 1-4): a session is missing
+  -- when its row did not match (session_id null). A matched row with a
+  -- null timestamp keeps the lag nullable — timestamp completeness is
+  -- not session existence.
+  ph.session_id is null as no_posthog_session
 from tracknow.conversions t
 left join attribution.bridge bridge
   on bridge.click_id = t.click_id
