@@ -20,7 +20,8 @@ import streamlit as st
 # the top so no section can be read as a shipped integration.
 DESIGN_INTRO = (
     "**Design only - nothing here is implemented.** This page outlines the daily "
-    "automated reconciliation between QuickBooks invoices and TrackNow commission. "
+    "automated reconciliation between QuickBooks invoices, operational TrackNow "
+    "commission, and the authoritative Google Sheet daily commission. "
     "The full technical specification (raw schema, SQL sketches, data quality checks, "
     "and orchestration) is documented in `docs/quickbooks_reconciliation_design.md`; "
     "this view summarizes the operational flow."
@@ -37,14 +38,14 @@ flowchart TD
         qbo --> airbyte --> raw_qb --> stg_qb
     end
 
-    subgraph TrackNow["TrackNow"]
+    subgraph TrackNow["TrackNow operational source"]
         raw_tn["raw.tracknow_checkouts"]
         stg_tn["dbt stg_tracknow_checkouts"]
-        fct_comm["dbt fct_commission_daily<br/>(one row per commission_date, firm_id)"]
+        fct_comm["dbt fct_tracknow_commission_daily<br/>(operational daily value)"]
         raw_tn --> stg_tn --> fct_comm
     end
 
-    stg_qb --> recon["dbt int_quickbooks_tracknow_reconciliation<br/>(one row per invoice x firm)"]
+    stg_qb --> recon["dbt int_quickbooks_tracknow_reconciliation<br/>(one row per firm x explicit period x currency)"]
     fct_comm --> recon
     recon --> alert_mart["dbt mart_finance_reconciliation_alerts<br/>(active failures)"]
     alert_mart --> notify["Slack / PagerDuty / email"]
@@ -72,15 +73,15 @@ LAYER_TABLE = (
     ),
     (
         "TrackNow",
-        "fct_commission_daily",
-        "One row per (commission_date, firm_id)",
-        "Production daily commission aggregate the invoice is compared against",
+        "fct_tracknow_commission_daily",
+        "One row per (commission_date, firm_id, currency_code)",
+        "Operational TrackNow daily value, retained for diagnostics",
     ),
     (
         "Intermediate",
         "int_quickbooks_tracknow_reconciliation",
-        "One row per (invoice_id, firm_id) with period_start/period_end",
-        "Join both sides over the period, compute deltas, classify the status",
+        "One row per (firm_id, explicit period_start/period_end, currency_code)",
+        "Aggregate invoices and operational TrackNow before joining, compute signed/absolute deltas, classify the status",
     ),
     (
         "Mart",
@@ -97,7 +98,9 @@ MAPPING_STRATEGY = (
     "A curated bridge dimension, ``dim_firm_accounting_mapping`` (dbt seed, "
     "one row per (firm_id, valid_from) reviewed by Finance with SCD-style dates), "
     "maps ``quickbooks_customer_id -> firm_id``. Firm name appears only as display "
-    "metadata; it is never a join key."
+    "metadata; it is never a join key. Effective mapping ranges must not overlap. "
+    "The invoice is counted once even if validation finds an ambiguous mapping, "
+    "so temporal mapping cannot fan out the amount."
 )
 
 # status -> rule, in evaluation order (first match wins).
@@ -111,8 +114,16 @@ STATUS_RULES = (
         "quickbooks_customer_id has no row in the mapping dimension.",
     ),
     (
+        "ambiguous_firm_mapping",
+        "More than one mapping row is effective for the invoice accounting date; retain the invoice once and classify it.",
+    ),
+    (
+        "missing_period",
+        "A complete billing period is unavailable. Keep null period boundaries; never fall back to the invoice month or a commission month.",
+    ),
+    (
         "missing_tracknow",
-        "tracknow_row_count = 0 - invoice whose period contains no TrackNow commission rows (distinguishes no rows from rows summing to zero).",
+        "tracknow_row_count = 0 - explicit invoice period has no operational TrackNow daily rows.",
     ),
     (
         "missing_quickbooks",
@@ -120,9 +131,28 @@ STATUS_RULES = (
     ),
     (
         "matched",
-        "absolute delta <= £5 OR pct delta <= 1% - example tolerance, to validate with Finance (dbt var, never hard-coded).",
+        "absolute delta <= £5 OR pct delta <= 1% against the operational TrackNow amount - example tolerance, to validate with Finance (dbt var, never hard-coded).",
     ),
     ("variance", "Difference above tolerance."),
+)
+
+GRAIN_NOTE = (
+    "Both sides are aggregated before comparison by ``firm_id``, explicit "
+    "``period_start``/``period_end``, and ``currency_code``. Two £500 invoices "
+    "for one firm and period become £1,000 once and match £1,000 of operational "
+    "commission; an invoice without explicit dates stays ``missing_period``. "
+    "There is no invoice-month fallback, and a missing commission-side period "
+    "is not invented."
+)
+
+SOURCE_BOUNDARY_NOTE = (
+    "The operational field ``tracknow_commission_amount`` remains visible "
+    "and is the amount used for the QuickBooks comparison. The authoritative "
+    "Google Sheet daily value remains a separate financial source; it is "
+    "never silently written into the TrackNow field. At conversion grain, "
+    "``referral_bonus_gbp`` excludes denied conversions and keeps refunds "
+    "without claiming they are net recognized. Official daily adjustments are "
+    "not allocated back to conversions."
 )
 
 DQ_CHECKS = (
@@ -182,6 +212,10 @@ def render() -> None:
 
     st.subheader("Firm mapping strategy")
     st.write(MAPPING_STRATEGY)
+
+    st.subheader("Reconciliation grain and source boundaries")
+    st.write(GRAIN_NOTE)
+    st.write(SOURCE_BOUNDARY_NOTE)
 
     st.subheader("Reconciliation statuses")
     for status, rule in STATUS_RULES:

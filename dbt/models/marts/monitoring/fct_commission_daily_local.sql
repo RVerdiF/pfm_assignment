@@ -14,6 +14,7 @@
 -- (staging is_valid_conversion = true, i.e. status <> 'denied' and status not
 -- NULL/unknown). Refunded conversions are kept and their commission is counted
 -- in the totals (no business rule was provided to exclude or reverse them).
+-- These source-reported amounts are not confirmed net recognized commission.
 --
 -- Metrics:
 --   conversion_count   number of valid conversions that day for the firm

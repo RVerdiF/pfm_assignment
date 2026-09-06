@@ -299,15 +299,20 @@ def test_methodology_page_documents_production_design() -> None:
         "fbclid",
         "attribution bridge",
         "click_id",
+        "tracknow_click_id",
+        "posthog_session_id",
+        "capture_source",
     ]:
         assert phrase in code
     for phrase in [
         "`click_id`",
         "`affiliate_session_id`",
-        "keys to attribution",
+        "TrackNow-side identifier retained",
         "without assuming that it equals",
+        "PFM does not generate or assign",
     ]:
         assert phrase in body
+    assert "attribution_click_id" not in body + code
 
     # The investigation narrative (queries/hypotheses) relocated to the Area 2
     # page: this page must point there, not render it.

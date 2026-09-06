@@ -86,6 +86,8 @@ def test_monitoring_page_states_thresholds_and_severities() -> None:
     assert "25%" in body
     assert "5 percentage points" in body
     assert "£500" in body
+    assert "signed_delta" in body
+    assert "same sign" in body
     # The reported 18% is treated as an observation, never a hardcoded SLA.
     assert "not a hardcoded SLA" in body
     # All three severities are used and routed.
@@ -128,6 +130,7 @@ def test_monitoring_page_covers_alerting_and_payload() -> None:
         "affected_date/period",
         "firm_id",
         "observed_value",
+        "signed_delta",
         "threshold",
         "query/model",
         "run_id",

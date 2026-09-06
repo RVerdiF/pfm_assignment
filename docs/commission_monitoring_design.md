@@ -14,6 +14,12 @@ builds the staging / intermediate / marts layers, and
 `mart_attribution_health` plus the reconciliation output are the published
 relations the checks below read.
 
+The local attribution-health mart is one row per
+(`conversion_date`, `utm_source`). Unmatched conversions have no session
+source, so their source dimension remains NULL/unknown. This design does not
+invent a channel, firm, device, or browser for those rows; those dimensions
+are available only if a production relation actually carries them.
+
 ---
 
 ## The five checks
@@ -52,7 +58,7 @@ how on-call is notified.
 | **Metric** | `unmatched_rate = unmatched_conversions / total_conversions`, from `mart_attribution_health`. |
 | **Threshold** | **P2** if the unmatched rate exceeds 25%, or rises more than 5 percentage points above the trailing 7-day baseline. The ~18% figure reported by the assignment is the observed production gap, **not** a hardcoded SLA - the baseline is computed from recent history, and thresholds are configuration. |
 | **Severity** | **P2** by default. Escalates to **P1** if the unmatched rate exceeds 40% (hard ceiling) or reporting for a critical channel goes dark. |
-| **Implementation** | Scheduled query over `mart_attribution_health` in production. Broken down by: total, channel, firm, and device/browser where available. |
+| **Implementation** | Scheduled query over `mart_attribution_health`. In this repository the available breakdown is the local (`conversion_date`, `utm_source`) grain; unmatched rows retain NULL/unknown source. Firm, device, and browser dimensions are not available in this relation and are not inferred. |
 | **On-call action** | Compare the rate against the baseline, check whether a specific channel or identifier source regressed, and hand off to the tracking/integration owner if the capture side broke. |
 
 ### Check 4 - Commission reconciliation variance
@@ -60,10 +66,10 @@ how on-call is notified.
 | | |
 |---|---|
 | **What it validates** | QuickBooks invoices and TrackNow-derived commission agree within materiality. |
-| **Metric** | `absolute_delta` and `pct_delta` per `firm_id` and reconciliation period, from `int_quickbooks_tracknow_reconciliation`. |
-| **Threshold (example, configurable)** | **P1**: absolute delta > £500. **P2**: pct delta > 5% **and** absolute delta > £50. **P3**: same sign delta for 3+ consecutive periods (regardless of materiality). |
+| **Metric** | `signed_delta = quickbooks_amount - tracknow_amount`, plus `absolute_delta = abs(signed_delta)` and `pct_delta`, per `firm_id` and reconciliation period, from `int_quickbooks_tracknow_reconciliation`. |
+| **Threshold (example, configurable)** | **P1**: absolute delta > £500. **P2**: pct delta > 5% **and** absolute delta > £50. **P3**: the non-zero `signed_delta` keeps the same sign for 3+ consecutive periods (regardless of materiality). |
 | **Severity** | **P1/P2/P3** by materiality, as above. |
-| **Implementation** | Monitoring query over `int_quickbooks_tracknow_reconciliation` (output of the reconciliation design in `docs/quickbooks_reconciliation_design.md`). |
+| **Implementation** | Monitoring query over `int_quickbooks_tracknow_reconciliation` (output of the reconciliation design); the comparison amount is operational TrackNow commission. The authoritative Google Sheet daily value remains a separate source and is not silently substituted or allocated to conversions. |
 | **On-call action** | The alert carries firm, period, both values, and both deltas, with a link to the reconciliation query for investigation; finance is notified for P1/P2. |
 
 ### Check 5 - Firm / accounting mapping coverage
@@ -130,6 +136,7 @@ detected_at
 affected_date/period
 firm_id (if applicable)
 observed_value
+signed_delta
 threshold
 query/model
 run_id

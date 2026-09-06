@@ -147,8 +147,8 @@ def test_reported_gap_callout_renders_with_sample_rate_from_marts() -> None:
     )
 
 
-def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
-    """Query 4 must use TrackNow's documented fields, not invented telemetry.
+def test_investigation_query_4_uses_firm_date_denominators() -> None:
+    """Query 4 profiles exact overlap with delivered TrackNow dimensions.
 
     The unmatched cohort has no PostHog session by definition, so the query
     that profiles it must use only TrackNow's own documented fields (firm_id,
@@ -163,32 +163,20 @@ def test_investigation_query_4_uses_tracknow_documented_fields() -> None:
     )
     lowered = sketch.lower()
 
-    # No invented telemetry columns (TrackNow staging does not carry these).
-    # Check for column references (t.os, t.device_type, etc.), not substrings.
-    for invented in ["device_type", "browser", "os", "country_code", "consent_state"]:
-        assert f"t.{invented}" not in lowered, f"invented column {invented!r} in Query 4"
-    # No identity bridge is invented to source the dimensions.
-    assert "affiliate_session_id = ph.session_id" not in lowered
-    assert "on ph.session_id = t.affiliate_session_id" not in lowered
-    # The sketch actually isolates the unmatched cohort.
-    assert "ph.session_id is null" in lowered
-    # Dimensions come from TrackNow's documented fields.
-    for dimension in ["firm_id", "trading_platform", "first_order"]:
-        assert dimension in lowered
-    # The prose tells the reader where the dimensions come from.
+    assert "staging.stg_tracknow_checkouts" in lowered
+    assert "staging.stg_posthog_sessions" in lowered
+    assert "conversion_date" in lowered
+    assert "firm_id" in lowered
+    assert "missing_click_id" in lowered
+    assert "exact_overlap" in lowered
+    assert "group by t.conversion_date, t.firm_id" in lowered
+    assert "attribution.bridge" not in lowered
     assert "TrackNow" in purpose
-    assert "documented" in purpose.lower() or "firm" in purpose.lower()
+    assert "denominators" in purpose.lower()
 
 
-def test_investigation_query_3_counts_dangling_bridge_sessions_as_unmatched() -> None:
-    """Query 3's unmatched definition matches Queries 1/4: no PostHog session.
-
-    A bridge row can carry a session_id that no longer exists in PostHog;
-    counting those as matched (countif(bridge.session_id is null)) would
-    contradict the reported-gap premise. Query 3 must therefore resolve the
-    PostHog session through the bridge and count rows without a live
-    PostHog session (ph.session_id is null) as unmatched.
-    """
+def test_investigation_query_3_uses_exact_identifier_overlap() -> None:
+    """Query 3 measures exact overlap without inventing a bridge join."""
     from sections.investigation import INVESTIGATION_QUERIES
 
     title, purpose, sketch = next(
@@ -196,28 +184,16 @@ def test_investigation_query_3_counts_dangling_bridge_sessions_as_unmatched() ->
     )
     lowered = sketch.lower()
 
-    # PostHog is joined through the bridge, so a dangling bridge session_id
-    # fails the match just like a missing bridge record.
-    assert "left join posthog.sessions ph" in lowered
-    assert "on ph.session_id = bridge.session_id" in lowered
-    # The unmatched count/rate use the live-session definition.
-    assert "countif(ph.session_id is null)" in lowered
-    # The wrong semantic (bridge-presence mistaken for a PostHog match).
-    assert "countif(bridge.session_id is null)" not in lowered
-    # It is still the by-channel breakdown.
-    assert "bridge.acquired_channel" in lowered
-    assert "group by bridge.acquired_channel" in lowered
+    assert "posthog_ids" in lowered
+    assert "gclid" in lowered and "fbclid" in lowered
+    assert "click_id_from_url" in lowered
+    assert "left join posthog_ids" in lowered
+    assert "exact_overlap" in lowered
+    assert "attribution.bridge" not in lowered
 
 
-def test_investigation_query_2_resolution_uses_live_posthog_session() -> None:
-    """Query 2's unresolved metric must test the live PostHog session.
-
-    "Carries an identifier yet fails to resolve a PostHog session" means the
-    bridge's session_id is absent OR dangling (no row in PostHog). Testing
-    only bridge.session_id presence would count a dangling bridge session_id
-    as resolved, contradicting the reported-gap semantics of Queries 1/3/4.
-    The separate bridge-presence coverage metric must be preserved.
-    """
+def test_investigation_query_2_reports_both_sides_identifier_coverage() -> None:
+    """Query 2 measures coverage in TrackNow and PostHog separately."""
     from sections.investigation import INVESTIGATION_QUERIES
 
     title, purpose, sketch = next(
@@ -225,24 +201,15 @@ def test_investigation_query_2_resolution_uses_live_posthog_session() -> None:
     )
     lowered = sketch.lower()
 
-    # PostHog is joined through the bridge so dangling session_ids fail.
-    assert "left join posthog.sessions ph" in lowered
-    assert "on ph.session_id = bridge.session_id" in lowered
-    # The unresolved metric is gated on bridge presence AND no live session.
-    assert (
-        "countif(bridge.click_id is not null\n"
-        "          and ph.session_id is null)" in lowered
-    )
-    # The wrong semantic (bridge session_id presence as the resolution test).
-    assert "and bridge.session_id is null)" not in lowered
-    # The bridge-presence coverage metric remains, unchanged in meaning.
-    # (Checked token-wise: the gate variant carries a newline before the
-    # closing paren, so the exact match only hits the coverage metric.)
-    assert "countif(bridge.click_id is not null)" in lowered
-    assert "with_bridge_record" in lowered
-    # The prose describes the live-session semantic.
-    assert "live posthog session" in purpose.lower()
-    assert "dangling" in purpose.lower()
+    assert "staging.stg_tracknow_checkouts" in lowered
+    assert "staging.stg_posthog_sessions" in lowered
+    assert "click_id_present" in lowered
+    assert "affiliate_session_id_present" in lowered
+    assert "click_id_from_url_present" in lowered
+    assert "gclid_present" in lowered
+    assert "fbclid_present" in lowered
+    assert "attribution.bridge" not in lowered
+    assert "coverage" in purpose.lower()
 
 
 def test_readme_scope_boundary_distinguishes_premise_from_sample() -> None:

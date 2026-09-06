@@ -16,9 +16,10 @@ import streamlit as st
 PAGE_INTRO = (
     "An investigation plan for the reported 18% production gap. "
     "Because real production tables were not delivered with this assignment, "
-    "the diagnostic queries and hypotheses below reflect the investigation I would "
-    "run in BigQuery. The provided anonymised sample cannot confirm or refute "
-    "any of them. The attribution logic and sample findings remain on the Area 1 "
+    "the first diagnostic queries below run against the delivered dbt staging "
+    "relations and the hypotheses define what to check in production. The "
+    "provided anonymised sample cannot confirm or refute any production root "
+    "cause. The attribution logic and sample findings remain on the Area 1 "
     "Methodology page."
 )
 
@@ -33,7 +34,7 @@ AREA_MAP = (
     ),
     (
         "Diagnostic queries",
-        "four diagnostic BigQuery queries in expanders to isolate where tracking breaks (below)",
+        "four staging SQL queries in expanders to isolate where tracking breaks (below)",
     ),
     (
         "Hypotheses and fixes",
@@ -55,112 +56,120 @@ AREA_MAP = (
     ),
 )
 
-# Constants below are the investigation narrative, relocated verbatim from
-# the Area 1 Methodology page (streamlit/sections/methodology.py) so the
-# Area 2 content sits in the Area 2 navigation group. The sketches are not
-# executed code. No column is invented - every field either exists in the
-# documented staging schema or is explicitly named as a hypothetical bridge
-# column with its role stated.
+# Constants below use the two delivered dbt staging relations. They are
+# executable investigation sketches over the sample's actual fields, not a
+# fictional production bridge. The sample cannot establish the missing
+# cross-system relationship; the exact-overlap query makes that boundary
+# measurable.
 INVESTIGATION_QUERIES = (
     (
-        "Query 1 - Daily baseline of the gap",
-        "Confirm the trend and temporal concentration of the reported "
-        "unmatched share before any breakdown is trusted.",
+        "Query 1 - Dates, status and population",
+        "Profile the comparable populations first: conversion dates, order "
+        "status, and click-id coverage. This shows whether the reported "
+        "production window can be compared with the delivered sample.",
         """\
--- Trend and temporal concentration of the reported gap.
--- Verifies the PostHog session actually exists, not just that the bridge
--- resolved a session_id: TrackNow LEFT JOIN bridge LEFT JOIN PostHog,
--- unmatched = ph.session_id IS NULL.
 select
-  t.created_date as conversion_date,
-  count(*)                                                      as conversions,
-  countif(ph.session_id is null)                                as unmatched,
-  countif(ph.session_id is null) / count(*)                     as unmatched_rate
-from tracknow.conversions t
-left join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-left join posthog.sessions ph
-  on ph.session_id = bridge.session_id
-where t.created_date >= date_sub(current_date(), interval 30 day)
-group by t.created_date
-order by t.created_date;""",
+  conversion_date,
+  status,
+  count(*) as conversions,
+  countif(is_valid_conversion) as valid_conversions,
+  countif(status = 'denied') as denied_conversions,
+  countif(status is null) as unknown_status_rows,
+  countif(click_id is null) as missing_click_id
+from staging.stg_tracknow_checkouts
+group by conversion_date, status
+order by conversion_date, status;""",
     ),
     (
         "Query 2 - Identifier coverage",
-        "Measure how often each attribution key is even present: missing "
-        "`click_id`, missing `affiliate_session_id`, presence of an "
-        "attribution bridge record, and conversions that carry an identifier "
-        "yet still fail to resolve a live PostHog session (the bridge's "
-        "session_id is absent or dangling).",
+        "Measure whether the identifiers needed for a bridge exist on each "
+        "side of the delivered data: TrackNow conversion identifiers and "
+        "PostHog session click identifiers. This is coverage evidence, not "
+        "a claim that the fields share a namespace.",
         """\
 select
-  count(*)                                                        as conversions,
-  countif(t.click_id is null)                                     as missing_click_id,
-  countif(t.affiliate_session_id is null)                         as missing_affiliate_session_id,
-  countif(bridge.click_id is not null)                            as with_bridge_record,
-  -- bridge present but no live PostHog session: the bridge has no
-  -- session_id or its session_id no longer exists in PostHog (dangling),
-  -- matching the reported-gap definition used in Queries 1/3/4
-  countif(bridge.click_id is not null
-          and ph.session_id is null)    as bridge_but_no_posthog_session
-from tracknow.conversions t
-left join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-left join posthog.sessions ph
-  on ph.session_id = bridge.session_id
-where t.created_date >= date_sub(current_date(), interval 30 day);""",
+  'tracknow' as source,
+  count(*) as rows,
+  countif(click_id is not null) as click_id_present,
+  countif(affiliate_session_id is not null) as affiliate_session_id_present,
+  countif(tracknow_user_id is not null) as tracknow_user_id_present,
+  0 as click_id_from_url_present,
+  0 as gclid_present,
+  0 as fbclid_present
+from staging.stg_tracknow_checkouts
+union all
+select
+  'posthog' as source,
+  count(*) as rows,
+  0 as click_id_present,
+  0 as affiliate_session_id_present,
+  0 as tracknow_user_id_present,
+  countif(click_id_from_url is not null) as click_id_from_url_present,
+  countif(gclid is not null) as gclid_present,
+  countif(fbclid is not null) as fbclid_present
+from staging.stg_posthog_sessions;""",
     ),
     (
-        "Query 3 - Gap by channel",
-        "Split unmatched conversions by acquiring channel: Google, Meta, and "
-        "other/unknown. A gap concentrated in one ad platform points at that "
-        "platform's click-identifier plumbing.",
+        "Query 3 - Exact identifier overlap",
+        "Quantify the only deterministic match available in the sample: a "
+        "TrackNow `click_id` equal to a PostHog `gclid`, `fbclid`, or "
+        "`click_id_from_url`, with no session-token assumption.",
         """\
+with posthog_ids as (
+  select gclid as identifier_value
+  from staging.stg_posthog_sessions
+  where gclid is not null
+  union
+  select fbclid
+  from staging.stg_posthog_sessions
+  where fbclid is not null
+  union
+  select click_id_from_url
+  from staging.stg_posthog_sessions
+  where click_id_from_url is not null
+),
+conversion_ids as (
+  select conversion_id, click_id
+  from staging.stg_tracknow_checkouts
+)
 select
-  bridge.acquired_channel,   -- 'google' | 'meta' | 'other', from the bridge
-  count(*)                                 as conversions,
-  -- unmatched = no matching PostHog session, consistent with Queries 1/4:
-  -- a bridge row whose session_id no longer exists in PostHog is unmatched,
-  -- so PostHog is joined through the bridge and rows without a live
-  -- PostHog session (ph.session_id is null) are counted as unmatched
-  countif(ph.session_id is null)           as unmatched,
-  countif(ph.session_id is null) / count(*) as unmatched_rate
-from tracknow.conversions t
-left join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-left join posthog.sessions ph
-  on ph.session_id = bridge.session_id
-where t.created_date >= date_sub(current_date(), interval 30 day)
-group by bridge.acquired_channel
-order by unmatched desc;""",
+  count(*) as conversions,
+  countif(c.click_id is not null) as click_id_present,
+  countif(p.identifier_value is not null) as exact_overlap,
+  countif(c.click_id is not null and p.identifier_value is null) as click_id_without_overlap,
+  countif(p.identifier_value is not null) / nullif(count(*), 0) as exact_overlap_rate
+from conversion_ids c
+left join posthog_ids p on p.identifier_value = c.click_id;""",
     ),
     (
-        "Query 4 - Gap by TrackNow-side dimensions",
-        "Break the unmatched cohort down by the TrackNow conversion's own "
-        "dimensions: firm, trading platform, and first-order status. A gap "
-        "concentrated in a specific firm or platform points at that partner's "
-        "integration. The PostHog session is missing by definition on the "
-        "unmatched rows, so every dimension comes from the TrackNow conversion "
-        "itself - no PostHog field is sourced, and no column is invented beyond "
-        "the documented TrackNow schema (firm_id, trading_platform, first_order).",
+        "Query 4 - Exact overlap by firm and date",
+        "Show denominators before interpreting a pattern: conversion volume, "
+        "missing IDs, and exact overlap by TrackNow firm/date. This can reveal "
+        "a partner or collection boundary while staying within delivered fields.",
         """\
--- The unmatched cohort has no PostHog session by definition, so the
--- breakdown uses only TrackNow's own documented fields: firm_id,
--- trading_platform, first_order. No ph.* dimension, no invented telemetry.
+with posthog_ids as (
+  select gclid as identifier_value
+  from staging.stg_posthog_sessions where gclid is not null
+  union
+  select fbclid
+  from staging.stg_posthog_sessions where fbclid is not null
+  union
+  select click_id_from_url
+  from staging.stg_posthog_sessions where click_id_from_url is not null
+)
 select
+  t.conversion_date,
   t.firm_id,
-  t.trading_platform,
-  t.first_order,
-  count(*) as unmatched_conversions
-from tracknow.conversions t
-left join attribution.bridge bridge
-  on bridge.click_id = t.click_id
-left join posthog.sessions ph
-  on ph.session_id = bridge.session_id
-where t.created_date >= date_sub(current_date(), interval 30 day)
-  and ph.session_id is null     -- unmatched cohort: session not in PostHog
-group by 1, 2, 3
-order by unmatched_conversions desc;""",
+  count(*) as conversions,
+  countif(t.click_id is null) as missing_click_id,
+  countif(t.click_id is not null and p.identifier_value is not null) as exact_overlap,
+  countif(t.click_id is not null and p.identifier_value is not null)
+    / nullif(count(*), 0)
+    as exact_overlap_rate
+from staging.stg_tracknow_checkouts t
+left join posthog_ids p on p.identifier_value = t.click_id
+group by t.conversion_date, t.firm_id
+order by t.conversion_date, conversions desc;""",
     ),
 )
 
@@ -169,43 +178,45 @@ order by unmatched_conversions desc;""",
 # be proven by the delivered sample.
 INVESTIGATION_HYPOTHESES = (
     (
-        "Hypothesis 1 - Identifier lost before or at affiliate redirect",
-        "`gclid` / `fbclid` exists on the landing session but is never "
-        "persisted or attached to the affiliate outbound link, so TrackNow "
-        "receives a click it cannot tie to PostHog.",
-        "**Test:** compare identifier coverage in Query 2 (missing click_id "
-        "vs with_bridge_record) and channel breakdown in Query 3.",
-        "**Fix:** persist ad-click identifiers first-party and attach them "
-        "consistently to the affiliate outbound redirect.",
+        "Hypothesis 1 - Population or window mismatch",
+        "The reported 18% production denominator and the delivered sample "
+        "cover different dates or status populations. A short PostHog window, "
+        "denied orders, or late-arriving rows can make the rates incomparable.",
+        "**Test:** use Query 1 to compare conversion dates, statuses, valid "
+        "rows, and identifier coverage before comparing any unmatched rate.",
+        "**Fix:** publish one denominator and date rule, then reprocess a small "
+        "lookback when either source arrives late.",
     ),
     (
-        "Hypothesis 2 - Cross-session conversion & identity expiration",
-        "The user enters through paid traffic but converts in a later "
-        "session or after cookie reset, so the converting session carries no "
-        "click identifier and the original ad click is never linked.",
-        "**Test:** inspect daily trend in Query 1 and first-order breakdown "
-        "in Query 4 alongside multi-session identity tracking.",
-        "**Fix:** keep first-party attribution state per user/browser for a "
-        "defined lookback window and stitch identities upon login.",
+        "Hypothesis 2 - Missing cross-system identifier bridge",
+        "Both sources contain identifiers, but the delivered data has no "
+        "record that correlates TrackNow's native `click_id` with a PostHog "
+        "session. The platform tokens therefore remain separate namespaces.",
+        "**Test:** compare the TrackNow and PostHog coverage rows in Query 2 "
+        "and the exact overlap count in Query 3.",
+        "**Fix:** capture the native TrackNow `click_id` and persist the "
+        "proposed bridge fields with the PostHog session and capture source.",
     ),
     (
-        "Hypothesis 3 - Partner / affiliate platform parameter stripping",
-        "An affiliate network or partner trading platform strips query "
-        "parameters on redirect or checkout, so the click identifier never reaches TrackNow.",
-        "**Test:** unmatched rate breakdown by `firm_id` and `trading_platform` "
-        "(Query 4) and by `acquired_channel` (Query 3).",
-        "**Fix:** standardize redirect parameter templates with partner networks "
-        "and add automated tracking QA tests asserting parameter survival.",
+        "Hypothesis 3 - Parameter loss at redirect or checkout",
+        "A click identifier is present in one stage but is stripped before it "
+        "reaches the other stage, leaving TrackNow and PostHog with no exact "
+        "overlap. The sample cannot locate the exact hop without event logs.",
+        "**Test:** use Query 3 and Query 4 to compare exact overlap by firm and "
+        "date, retaining denominators and missing-ID counts.",
+        "**Fix:** add redirect/landing checks for parameter survival and retain "
+        "the native TrackNow click event used to build the bridge.",
     ),
     (
-        "Hypothesis 4 - Client-side collection drop (ad blockers / consent)",
-        "The TrackNow conversion happens server-side, but the PostHog session "
-        "is never recorded client-side (consent not granted, ad blocker, script "
-        "failure).",
-        "**Test:** compare server-side TrackNow volume against client-side "
-        "analytics volume over time (Query 1) across devices/platforms.",
-        "**Fix:** capture critical conversion identifiers server-side or route "
-        "analytics through a first-party tracking endpoint.",
+        "Hypothesis 4 - Collection failure or ingestion lag",
+        "The click or session is collected, but a client-side failure or source "
+        "delay leaves PostHog incomplete when conversions are evaluated. Recent "
+        "dates should show a larger gap if this is the cause.",
+        "**Test:** compare the date pattern and denominators in Queries 1 and 4 "
+        "after applying the same freshness cutoff; the provided sample has no "
+        "ingestion timestamp to prove this.",
+        "**Fix:** monitor source freshness and reprocess a bounded lookback "
+        "before declaring a conversion permanently unmatched.",
     ),
 )
 
@@ -242,12 +253,13 @@ def render() -> None:
         "re-derived from the sample."
     )
     st.caption(
-        "Queries use BigQuery SQL over documented production contracts "
-        "(TrackNow conversions, PostHog sessions, and the attribution bridge). "
-        "Any hypothetical fields beyond current schemas are explicitly noted."
+        "Queries use the delivered dbt staging contracts "
+        "(`staging.stg_tracknow_checkouts` and `staging.stg_posthog_sessions`) "
+        "and can be adapted to the production schema once its source tables "
+        "are available. No bridge relation is assumed or queried."
     )
 
-    st.markdown("##### Diagnostic queries (BigQuery)")
+    st.markdown("##### Diagnostic queries (delivered staging data)")
     for title, purpose, sketch in INVESTIGATION_QUERIES:
         with st.expander(title):
             st.markdown(f"**Objective:** {purpose}")
@@ -263,10 +275,10 @@ def render() -> None:
     st.write(ROOT_CAUSE_STATEMENT)
     st.write(
         "Remediation depends on which test confirms the root cause: fixing "
-        "persistence and propagation across affiliate redirects (Hypothesis 1), "
-        "introducing first-party multi-session attribution state (Hypothesis 2), "
-        "repairing affiliate partner redirect parameter stripping (Hypothesis 3), "
-        "or routing client-side analytics through a first-party proxy / server-side capture (Hypothesis 4)."
+        "the denominator and freshness rule (Hypothesis 1), "
+        "populating the native-click bridge (Hypothesis 2), "
+        "repairing parameter survival (Hypothesis 3), "
+        "or fixing collection and bounded reprocessing (Hypothesis 4)."
     )
     st.caption(
         "This page is a design reference and does not query the warehouse: the "

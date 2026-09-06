@@ -66,8 +66,10 @@ CHECKS = (
         "recent history and thresholds are configuration.",
         "P2 - escalates to P1 if the unmatched rate exceeds 40% (hard ceiling) "
         "or a critical report goes dark.",
-        "Scheduled query over mart_attribution_health in production, broken "
-        "down by total, channel, firm, and device/browser where available.",
+        "Scheduled query over mart_attribution_health. The local relation is "
+        "at (conversion_date, utm_source); unmatched rows retain NULL/unknown "
+        "source. Firm, device, and browser dimensions are unavailable here "
+        "and are not inferred.",
         "Compare against the baseline, check whether one channel or "
         "identifier source regressed, hand off to the tracking/integration "
         "owner if capture broke.",
@@ -76,14 +78,17 @@ CHECKS = (
         "Check 4 - Commission reconciliation variance",
         "QuickBooks invoices and TrackNow-derived commission agree within "
         "materiality.",
+        "signed_delta = quickbooks_amount - tracknow_amount, plus "
         "absolute_delta and pct_delta per firm_id and reconciliation period, "
         "from int_quickbooks_tracknow_reconciliation.",
         "P1: absolute delta > £500. P2: pct delta > 5% and absolute delta > "
-        "£50. P3: same sign delta for 3+ consecutive periods (regardless of "
-        "materiality).",
+        "£50. P3: non-zero signed_delta keeps the same sign for 3+ consecutive "
+        "periods (regardless of materiality).",
         "P1/P2/P3 - by materiality.",
         "Monitoring query over int_quickbooks_tracknow_reconciliation "
-        "(output of the reconciliation design).",
+        "(output of the reconciliation design), using operational TrackNow "
+        "commission; the separate official daily source is not substituted or "
+        "allocated to conversions.",
         "The alert carries firm, period, both values, and both deltas with a "
         "link to the reconciliation query; Finance is notified for P1/P2.",
     ),
@@ -141,6 +146,7 @@ detected_at
 affected_date/period
 firm_id (if applicable)
 observed_value
+signed_delta
 threshold
 query/model
 run_id
