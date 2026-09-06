@@ -105,8 +105,7 @@ def test_quickbooks_page_shows_full_architecture_with_grains() -> None:
     assert "active reconciliation failure" in grains[5]
 
 
-def test_documented_reconciliation_sql_aggregates_invoices_and_keeps_missing_period() -> None:
-    """Run the design sketch against the smallest meaningful finance example."""
+def _get_documented_sql() -> str:
     doc = DESIGN_DOC.read_text()
     sql = re.findall(r"```sql\n(.*?)```", doc, flags=re.DOTALL)[0]
     replacements = {
@@ -118,6 +117,12 @@ def test_documented_reconciliation_sql_aggregates_invoices_and_keeps_missing_per
     }
     for source, target in replacements.items():
         sql = sql.replace(source, target)
+    return sql
+
+
+def test_documented_reconciliation_sql_aggregates_invoices_and_keeps_missing_period() -> None:
+    """Run the design sketch against the smallest meaningful finance example."""
+    sql = _get_documented_sql()
 
     connection = duckdb.connect()
     connection.execute(
@@ -153,6 +158,82 @@ def test_documented_reconciliation_sql_aggregates_invoices_and_keeps_missing_per
     unknown = rows[rows["reconciliation_status"] == "missing_period"].iloc[0]
     assert unknown["quickbooks_invoice_amount"] == 125.0
     assert pd.isna(unknown["period_start"])
+
+
+def test_documented_reconciliation_sql_retains_uncovered_tracknow_commission() -> None:
+    """TrackNow commissions with no matching invoice must not disappear from SQL."""
+    sql = _get_documented_sql()
+    connection = duckdb.connect()
+    connection.execute(
+        """
+        create table stg_quickbooks_invoices as
+        select * from (values
+            ('i-1', 'qbo-a', date '2025-01-31', date '2025-01-01', date '2025-01-31', 'GBP', 500.0, 'explicit')
+        ) as t(invoice_id, quickbooks_customer_id, invoice_date, period_start, period_end, currency_code, invoice_total, period_status)
+        """
+    )
+    connection.execute(
+        """
+        create table dim_firm_accounting_mapping as
+        select * from (values ('firm-a', 'qbo-a', date '2025-01-01', cast(null as date)))
+        as t(firm_id, quickbooks_customer_id, valid_from, valid_to)
+        """
+    )
+    connection.execute(
+        """
+        create table fct_tracknow_commission_daily as
+        select * from (values
+            ('firm-a', date '2025-01-15', 'GBP', 500.0),
+            ('firm-b', date '2025-01-20', 'GBP', 750.0)
+        ) as t(firm_id, commission_date, currency_code, commission_gbp)
+        """
+    )
+    rows = connection.execute(sql).fetchdf()
+    uncovered = rows[rows["firm_id"] == "firm-b"]
+    assert len(uncovered) == 1
+    record = uncovered.iloc[0]
+    assert record["tracknow_commission_amount"] == 750.0
+    assert pd.isna(record["quickbooks_invoice_amount"])
+    assert record["reconciliation_status"] == "missing_period"
+
+
+def test_documented_reconciliation_sql_distinguishes_unmapped_and_ambiguous_mappings() -> None:
+    """Distinct mapping errors must not be collapsed together or hide each other."""
+    sql = _get_documented_sql()
+    connection = duckdb.connect()
+    connection.execute(
+        """
+        create table stg_quickbooks_invoices as
+        select * from (values
+            ('i-unmapped', 'qbo-unmapped', date '2025-01-31', date '2025-01-01', date '2025-01-31', 'GBP', 200.0, 'explicit'),
+            ('i-ambiguous', 'qbo-ambiguous', date '2025-01-31', date '2025-01-01', date '2025-01-31', 'GBP', 300.0, 'explicit')
+        ) as t(invoice_id, quickbooks_customer_id, invoice_date, period_start, period_end, currency_code, invoice_total, period_status)
+        """
+    )
+    connection.execute(
+        """
+        create table dim_firm_accounting_mapping as
+        select * from (values
+            ('firm-x', 'qbo-ambiguous', date '2025-01-01', cast(null as date)),
+            ('firm-y', 'qbo-ambiguous', date '2025-01-01', cast(null as date))
+        ) as t(firm_id, quickbooks_customer_id, valid_from, valid_to)
+        """
+    )
+    connection.execute(
+        """
+        create table fct_tracknow_commission_daily (
+            firm_id varchar,
+            commission_date date,
+            currency_code varchar,
+            commission_gbp double
+        )
+        """
+    )
+    rows = connection.execute(sql).fetchdf()
+    statuses = set(rows["reconciliation_status"])
+    assert "unmapped_firm" in statuses
+    assert "ambiguous_firm_mapping" in statuses
+    assert len(rows) == 2
 
 
 def test_quickbooks_page_maps_customer_to_firm_without_name_join() -> None:

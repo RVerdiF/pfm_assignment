@@ -20,8 +20,9 @@ import streamlit as st
 # the top so no section can be read as a shipped integration.
 DESIGN_INTRO = (
     "**Design only - nothing here is implemented.** This page outlines the daily "
-    "automated reconciliation between QuickBooks invoices, operational TrackNow "
-    "commission, and the authoritative Google Sheet daily commission. "
+    "automated reconciliation between QuickBooks invoices and operational TrackNow "
+    "commission. The authoritative Google Sheet daily commission is an independent "
+    "upstream financial source and is not substituted into this pipeline. "
     "The full technical specification (raw schema, SQL sketches, data quality checks, "
     "and orchestration) is documented in `docs/quickbooks_reconciliation_design.md`; "
     "this view summarizes the operational flow."

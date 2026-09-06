@@ -153,6 +153,9 @@ The core of the design: getting from a QuickBooks customer to a PFM
   joined. Two £500 invoices for one firm and one explicit billing period are
   therefore one £1,000 invoice-side amount; neither invoice is compared with
   the full firm total a second time.
+- **Mapping segregation:** invoices with no mapping (`mapping_match_count = 0`)
+  and invoices with ambiguous mapping (`mapping_match_count > 1`) are kept in
+  separate groups and never collapsed together under `firm_id = null`.
 - **Billing-period contract:** only a complete period extracted from the
   invoice source is an explicit billing period. The invoice date/month is not
   a fallback. A row with missing or incomplete boundaries stays
@@ -188,6 +191,8 @@ invoice_rows as (
 ),
 
 invoice_groups as (
+    -- Distinct mapping outcomes (unmapped vs ambiguous) are kept in separate
+    -- groups so max(mapping_match_count) cannot hide unmapped invoices.
     select
         case when mapping_match_count = 1 then mapped_firm_id end as firm_id,
         period_start,
@@ -195,10 +200,14 @@ invoice_groups as (
         currency_code,
         sum(invoice_total) as quickbooks_invoice_amount,
         count(distinct invoice_id) as invoice_count,
-        max(mapping_match_count) as mapping_match_count
+        case
+            when mapping_match_count = 0 then 0
+            when mapping_match_count > 1 then 2
+            else 1
+        end as mapping_match_count
     from invoice_rows
     where period_status = 'explicit'
-    group by 1, 2, 3, 4
+    group by 1, 2, 3, 4, 7
 ),
 
 tracknow_by_period as (
@@ -214,6 +223,7 @@ tracknow_by_period as (
       on i.firm_id = t.firm_id
      and t.commission_date between i.period_start and i.period_end
      and t.currency_code = i.currency_code
+    where i.firm_id is not null
     group by 1, 2, 3, 4
 ),
 
@@ -240,11 +250,40 @@ unknown_period as (
         currency_code,
         sum(invoice_total) as quickbooks_invoice_amount,
         count(distinct invoice_id) as invoice_count,
-        max(mapping_match_count) as mapping_match_count,
+        case
+            when mapping_match_count = 0 then 0
+            when mapping_match_count > 1 then 2
+            else 1
+        end as mapping_match_count,
         null as tracknow_commission_amount,
         null as tracknow_row_count
     from invoice_rows
     where period_status = 'missing_period'
+    group by 1, 4, 7
+),
+
+uncovered_tracknow as (
+    -- Source-coverage check: operational TrackNow daily rows not covered by
+    -- any explicit invoice billing period are retained as missing_period
+    -- without inventing a fabricated commission month.
+    select
+        t.firm_id,
+        null as period_start,
+        null as period_end,
+        t.currency_code,
+        null as quickbooks_invoice_amount,
+        null as invoice_count,
+        1 as mapping_match_count,
+        sum(t.commission_gbp) as tracknow_commission_amount,
+        count(t.commission_date) as tracknow_row_count
+    from {{ ref('fct_tracknow_commission_daily') }} t
+    where not exists (
+        select 1
+        from invoice_groups i
+        where i.firm_id = t.firm_id
+          and i.currency_code = t.currency_code
+          and t.commission_date between i.period_start and i.period_end
+    )
     group by 1, 4
 )
 
@@ -257,10 +296,10 @@ select
               / r.quickbooks_invoice_amount
     end as pct_delta,
     case
-        when r.period_start is null or r.period_end is null then 'missing_period'
+        when r.currency_code <> 'GBP' then 'currency_mismatch'
         when r.mapping_match_count > 1 then 'ambiguous_firm_mapping'
         when r.mapping_match_count = 0 then 'unmapped_firm'
-        when r.currency_code <> 'GBP' then 'currency_mismatch'
+        when r.period_start is null or r.period_end is null then 'missing_period'
         when r.invoice_count is null then 'missing_quickbooks'
         when r.tracknow_row_count = 0 then 'missing_tracknow'
         when abs(r.quickbooks_invoice_amount - r.tracknow_commission_amount)
@@ -274,16 +313,20 @@ from (
     select * from period_reconciled
     union all
     select * from unknown_period
+    union all
+    select * from uncovered_tracknow
 ) r
 ```
 
 The join emits `missing_tracknow` when an explicit invoice period has no
-operational TrackNow daily rows. A `missing_quickbooks` row is valid only when
-an upstream commission source supplies its own explicit billing period; the
-daily source described here does not, so an unmatched daily row is retained by
-the source-coverage check as `missing_period` instead of being turned into a
-fabricated commission month. This is a deliberate boundary of the design:
-the model cannot infer an invoice period from a commission date.
+operational TrackNow daily rows. Operational TrackNow rows not covered by any
+explicit invoice billing period are retained via the source-coverage CTE
+(`uncovered_tracknow`) as `missing_period` rather than silently disappearing or
+fabricating an invoice month. A `missing_quickbooks` row is valid when an upstream
+commission source supplies its own explicit billing period with no covering
+invoice; the daily source described here does not, so uncovered daily rows
+remain `missing_period`. This is a deliberate boundary of the design: the model
+cannot infer an invoice period from a commission date.
 
 The grouped row keeps an audit list or count of its contributing `invoice_id`
 values. Finance can therefore trace the £1,000 aggregate back to two £500
