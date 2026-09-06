@@ -53,12 +53,12 @@ METHOD_RULES = (
     (
         "1. Exact match only",
         "A conversion is attributed to a session only when the TrackNow "
-        "`click_id` equals a PostHog click identifier exactly - a `gclid`, "
+        "`click_id` equals a PostHog click identifier exactly, such as a `gclid`, "
         "`fbclid`, or the click id read from the landing URL. This is the "
         "sample implementation constraint: exact click-id equality is the "
         "only relationship provable in the anonymised file. No fuzzy "
         "matching, no normalization of identifier values, and no invented "
-        "bridge - the sample carries no documented identity contract, so an "
+        "bridge: the sample carries no documented identity contract, so an "
         "`affiliate_session_id` is never ASSUMED to equal a PostHog "
         "`session_id` here (that is a data limitation, not evidence that "
         "`affiliate_session_id` is irrelevant in production).",
@@ -79,8 +79,8 @@ METHOD_RULES = (
     (
         "4. Recency tie-break",
         "Among the remaining eligible sessions the most recent one wins. "
-        "When no single session wins - e.g. two sessions tie under rules 3 "
-        "and 4 - the conversion is marked ambiguous and carries no attributed "
+        "When no single session wins, for example when two sessions tie under rules 3 "
+        "and 4, the conversion is marked ambiguous and carries no attributed "
         "session.",
     ),
 )
@@ -90,7 +90,7 @@ METHOD_RULES = (
 DECISION_STATES = (
     (
         "matched",
-        "Exactly one eligible session survived rules 2–4. The conversion is "
+        "Exactly one eligible session survived rules 2 through 4. The conversion is "
         "reported with that session's channel (UTM source).",
     ),
     (
@@ -143,7 +143,7 @@ PRODUCTION_IDENTIFIER_ROLES = (
     ),
     (
         "`click_id_from_url`",
-        "PostHog's record of the click id read from the landing URL - the "
+        "PostHog's record of the click id read from the landing URL: the "
         "analytics-side trace of the same identifier flow.",
     ),
     (
@@ -165,16 +165,17 @@ PRODUCTION_IDENTIFIER_ROLES = (
     ),
     (
         "`click_id`",
-        "The TrackNow outbound-click identifier carried by the conversion - "
-        "the key that closes the loop. Must equal the `attribution_click_id` "
+        "The TrackNow outbound-click identifier carried by the conversion, "
+        "which is the key that closes the loop. Must equal the `attribution_click_id` "
         "passed on the affiliate URL.",
     ),
     (
         "`affiliate_session_id`",
         "Assigned by TrackNow when the affiliate link is clicked; one of the "
-        "keys to attribution in the TrackNow contract. The sample cannot "
+        "keys to attribution in the TrackNow contract, without assuming that it equals "
+        "`PostHog.session_id`. The sample cannot "
         "relate it to a PostHog session, which is a property of the "
-        "provided anonymised file - production design must document what it "
+        "provided anonymised file: production design must document what it "
         "references rather than discard it.",
     ),
     (
@@ -193,7 +194,7 @@ EDGE_CASES = (
     (
         "Missing click_id on conversion",
         "Conversion arrives with no click identifier at all.",
-        "unmatched / missing_click_id - cannot be attributed under exact "
+        "unmatched / missing_click_id: cannot be attributed under exact "
         "matching; surfaced for tracking-layer repair.",
     ),
     (
@@ -207,7 +208,7 @@ EDGE_CASES = (
         "Multiple paid clicks before conversion",
         "User clicks both a Google and a Meta ad (or multiple ads) before "
         "converting.",
-        "Deterministic attribution policy (typed-identifier priority + "
+        "Deterministic attribution policy (typed-identifier priority plus "
         "recency tie-break) chooses exactly one session; no ambiguous "
         "multi-channel credit.",
     ),
@@ -254,9 +255,9 @@ DBT_ARCHITECTURE_TABLE = (
     ),
     (
         "stg_commission_daily",
-        "Staging (Production)",
+        "Staging (Production Assumption)",
         "One row per (commission_date, firm_id)",
-        "Reads raw.google_sheets_commission_daily (authoritative business Google Sheet ingested via Airbyte into BigQuery); casts column types (commission_date to DATE, amounts to NUMERIC); normalizes firm_id; validates currency; checks for nulls; deduplicates by (commission_date, firm_id).",
+        "Production assumption: The Google Sheets commission workbook was not provided in assignment assets. The model schema, join keys, logic, and data quality checks are proposed based on the prompt specification, not validated against real production files. In production, reads raw.google_sheets_commission_daily ingested via Airbyte into BigQuery; casts column types (commission_date to DATE, amounts to NUMERIC); normalizes firm_id; validates currency; checks for nulls; deduplicates by (commission_date, firm_id).",
     ),
     (
         "int_tracknow_attribution_candidates",
@@ -284,9 +285,9 @@ DBT_ARCHITECTURE_TABLE = (
     ),
     (
         "int_tracknow_commission_reconciliation",
-        "Intermediate (Production)",
+        "Intermediate (Production Assumption)",
         "One row per (commission_date, firm_id)",
-        "Full outer join between TrackNow daily commission aggregates and the authoritative Google Sheet daily commission (stg_commission_daily) on (commission_date, firm_id); computes absolute and percentage deltas; classifies reconciliation status; enforces precedence of the official Google Sheet commission over TrackNow values.",
+        "Production assumption: Proposed reconciliation logic based on prompt specifications, not validated against live Google Sheets data. Full outer join between TrackNow daily commission aggregates and the authoritative Google Sheet daily commission (stg_commission_daily) on (commission_date, firm_id); computes absolute and percentage deltas; classifies reconciliation status; enforces precedence of the official Google Sheet commission over TrackNow values.",
     ),
     (
         "fct_revenue_attribution",
@@ -308,9 +309,9 @@ DBT_ARCHITECTURE_TABLE = (
     ),
     (
         "analytics_core.f_commission_daily",
-        "Marts (Production)",
+        "Marts (Production Assumption)",
         "One row per (commission_date, firm_id)",
-        "Target production reporting mart in BigQuery; publishes official daily commission figures fed by int_tracknow_commission_reconciliation where the Google Sheet commission has precedence; powers executive dashboards, financial reporting, and QuickBooks invoice reconciliation.",
+        "Production assumption: Target BigQuery reporting mart proposed to satisfy financial reconciliation, not fed by live files in this delivery. Publishes official daily commission figures fed by int_tracknow_commission_reconciliation where the Google Sheet commission has precedence; powers executive dashboards, financial reporting, and QuickBooks invoice reconciliation.",
     ),
 )
 
@@ -530,6 +531,9 @@ def _limitation_notes(connection) -> list[tuple[str, str]]:
         (
             "No authoritative daily commission source",
             "The real `analytics_core.f_commission_daily` table was not provided. "
+            "The proposed pipeline across `stg_commission_daily`, `int_tracknow_commission_reconciliation`, "
+            "and `analytics_core.f_commission_daily` is an unvalidated production assumption. "
+            "The schema, join keys, logic, and data quality tests were designed from the prompt specification. "
             "The app shows a clearly labelled LOCAL proxy built from the TrackNow "
             "sample instead, never as the source of truth.",
         ),
@@ -557,18 +561,45 @@ def _page_intro() -> None:
     )
 
 
+def _rationale_section() -> None:
+    st.subheader("Attribution rationale and data findings")
+    st.write(
+        "Before defining transformation models or matching rules, we evaluated the raw datasets to determine what identity linkages the data can genuinely support."
+    )
+    st.markdown(
+        "* **Observations in the data**: PostHog records browsing sessions with session identifiers, distinct IDs, start timestamps, landing URLs, ad identifiers (`gclid`, `fbclid`), and marketing parameters. TrackNow records affiliate checkouts with conversion IDs, conversion dates, order values, commission amounts, outbound click IDs, affiliate session IDs, and user IDs.\n"
+        "* **Viable matching keys**: The primary candidate keys connecting conversions to sessions are the click identifiers: TrackNow `click_id` compared against PostHog ad click IDs (`gclid`, `fbclid`) or URL parameters (`click_id_from_url`).\n"
+        "* **Relationships that cannot be assumed**: TrackNow `affiliate_session_id` cannot be treated as equal to PostHog `session_id` because each platform generates its own session tokens without a shared contract. Similarly, `tracknow_user_id` cannot be equated to PostHog `distinct_id`. Furthermore, TrackNow supplies only a conversion date without an order timestamp, so intraday session sequence cannot be guessed.\n"
+        "* **Why exact matching was chosen**: Exact identifier matching is the only deterministic, auditable standard supported by the data. Approximating keys or fabricating joins would risk misattributing revenue to unrelated marketing channels. When an identifier does not match exactly, leaving the record unmatched is the analytically sound decision.\n"
+        "* **Evolution to the dbt architecture**: These findings directly structured our dbt design. Staging models clean and type cast raw records while preserving all rows. Intermediate models isolate candidate keys, apply deterministic exact matching hierarchy with recency tie breaks, and classify unmatched records into an auditable diagnostic taxonomy. Marts publish reconciled reporting for revenue attribution and tracking health."
+    )
+
+
 def _production_design_section() -> None:
     st.subheader("Production attribution design")
     st.write(
-        "The reported 18% gap indicates a break somewhere in the identity "
-        "linkage across ad platforms, PostHog, and TrackNow. Rather than "
-        "guessing links after conversions occur, production needs an explicit "
-        "identity bridge. Here is how that end-to-end flow should work:"
+        "The core cross-system attribution challenge is namespace separation. "
+        "PostHog tracks user browsing sessions using `distinct_id` and `session_id`. "
+        "TrackNow manages affiliate conversions in a distinct platform, returning an outbound `click_id` upon checkout. "
+        "Because neither system natively recognizes the other's internal tokens, reliable attribution cannot rely on guesswork. "
+        "Production requires an explicit, persistent first-party identifier that traverses both environments from initial ad click to final purchase."
+    )
+    st.write(
+        "The target architecture establishes a clean, end-to-end attribution loop:"
     )
     st.code(PRODUCTION_IDENTITY_FLOW, language=None)
-    st.write("Each identifier in that flow has a defined role:")
+    st.write("Flow summary:")
+    st.markdown(
+        "* **Capture ad-click identifier**: On the landing page, capture inbound ad parameters (`gclid` or `fbclid`).\n"
+        "* **Associate with PostHog identity**: Attach the captured ad identifier to the active PostHog `session_id` and user `distinct_id`.\n"
+        "* **Persist attribution key**: Store a persistent `attribution_click_id` in a first-party bridge table that survives session restarts.\n"
+        "* **Pass to TrackNow**: Forward this `attribution_click_id` as the TrackNow `click_id` query parameter on outbound affiliate links.\n"
+        "* **TrackNow records conversion**: When a purchase completes, TrackNow returns that exact `click_id` in the conversion record.\n"
+        "* **Resolve the bridge**: The conversion `click_id` looks up the bridge table and deterministically resolves the original PostHog session and user."
+    )
+    st.write("Identifier roles across the systems:")
     for identifier, role in PRODUCTION_IDENTIFIER_ROLES:
-        st.markdown(f"- **{identifier}** - {role}")
+        st.markdown(f"* **{identifier}**: {role}")
     st.write(
         "This architecture establishes two key constraints. First, `gclid` "
         "and `fbclid` captured on landing must persist alongside the PostHog "
@@ -581,6 +612,9 @@ def _production_design_section() -> None:
         "Finally, `utm_content` is preserved for ad-level creative reporting "
         "(exposed as `ad_id` in `marts.fct_revenue_attribution`), never as a join key between tables."
     )
+    st.write(
+        "Production investigations and root cause diagnostics for the reported 18% gap are detailed on the Investigation & monitoring page."
+    )
     st.markdown("##### Edge cases and data-model handling")
     st.write(
         "The following structural boundaries apply regardless of which "
@@ -588,7 +622,7 @@ def _production_design_section() -> None:
         "edge case, when it occurs, and how the data model handles it."
     )
     for case, when, handling in EDGE_CASES:
-        st.markdown(f"- **{case}.** *When:* {when}. *Handling:* {handling}")
+        st.markdown(f"* **{case}.** When: {when}. Handling: {handling}")
 
 
 def _dbt_architecture_section() -> None:
@@ -603,6 +637,13 @@ def _dbt_architecture_section() -> None:
         "executable local sample and the planned production Google Sheet "
         "commission pipeline, including each model's explicit grain and key "
         "transformations:"
+    )
+    st.info(
+        "Production assumption note: The daily commission Google Sheet was not provided in the assignment assets. "
+        "The models `stg_commission_daily`, `int_tracknow_commission_reconciliation`, and `analytics_core.f_commission_daily` "
+        "are architectural proposals based on the assignment prompt rather than pipelines validated against real files. "
+        "Their schemas, primary keys, reconciliation logic, and data quality tests represent our production design. "
+        "Locally, `fct_commission_daily_local` acts as an executable proxy mart built from the sample."
     )
     st.table(
         {
@@ -622,10 +663,10 @@ def _method_section() -> None:
         "rules govern how orders match to PostHog sessions in this sample:"
     )
     for title, body in METHOD_RULES:
-        st.markdown(f"**{title}** - {body}")
-    st.markdown("**Outcome** - every conversion gets one of three states:")
+        st.markdown(f"**{title}**: {body}")
+    st.markdown("**Outcome**: every conversion gets one of three states:")
     for state, meaning in DECISION_STATES:
-        st.markdown(f"- **`{state}`** - {meaning}")
+        st.markdown(f"* **`{state}`**: {meaning}")
 
 
 def _results_section(facts: dict[str, int | float]) -> None:
@@ -649,7 +690,7 @@ def _limitations_section(connection) -> None:
     st.subheader("Limitations")
     st.write("What this delivery does not claim:")
     for title, body in _limitation_notes(connection):
-        st.markdown(f"- **{title}** - {body}")
+        st.markdown(f"* **{title}**: {body}")
 
 
 def _recommendations_section(facts: dict[str, int | float]) -> None:
@@ -672,7 +713,7 @@ def _recommendations_section(facts: dict[str, int | float]) -> None:
             "exact matching."
         )
     st.markdown(
-        "- **Raise click-id coverage at the source** - "
+        "* **Raise click-id coverage at the source**: "
         "The tracking layer should treat the click id as a required field on "
         "every order." + coverage_tail
     )
@@ -685,14 +726,14 @@ def _recommendations_section(facts: dict[str, int | float]) -> None:
     else:
         propagate_tail = ""
     st.markdown(
-        "- **Propagate identifiers consistently** - "
+        "* **Propagate identifiers consistently**: "
         "Whatever id is captured at click time must survive redirects and be "
         "written into the session record, not only into the URL."
         + propagate_tail
     )
 
     st.markdown(
-        "- **Persist identifiers between session and conversion** - "
+        "* **Persist identifiers between session and conversion**: "
         "The generic URL click id exists only on the session side; converting "
         "flows should carry the same identifier into the order payload so the "
         "two systems share one key namespace."
@@ -706,7 +747,7 @@ def _recommendations_section(facts: dict[str, int | float]) -> None:
     else:
         window_tail = ""
     st.markdown(
-        "- **Widen and monitor the PostHog window** - "
+        "* **Widen and monitor the PostHog window**: "
         "A production window must start before the earliest order and be "
         "monitored so coverage loss is visible continuously, not discovered "
         "at report time." + window_tail
@@ -722,6 +763,7 @@ def render() -> None:
     # consistent within a single render.
     facts = _read_narrative_facts(connection)
 
+    _rationale_section()
     _production_design_section()
     _dbt_architecture_section()
     _method_section()
