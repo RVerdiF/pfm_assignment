@@ -14,8 +14,11 @@ QuickBooks integration is implemented and no invented data is presented.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
+import duckdb
+import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,7 +79,7 @@ def test_quickbooks_page_shows_full_architecture_with_grains() -> None:
         "Airbyte source",
         "raw_quickbooks.invoices",
         "stg_quickbooks_invoices",
-        "fct_commission_daily",
+        "fct_tracknow_commission_daily",
         "int_quickbooks_tracknow_reconciliation",
         "mart_finance_reconciliation_alerts",
         "Slack / PagerDuty / email",
@@ -97,9 +100,59 @@ def test_quickbooks_page_shows_full_architecture_with_grains() -> None:
     assert "One row per raw invoice record/version" in grains[0]
     assert "One row per (firm_id, valid_from)" in grains[1]
     assert "One row per current invoice" in grains[2]
-    assert "(commission_date, firm_id)" in grains[3]
-    assert "(invoice_id, firm_id)" in grains[4]
+    assert "(commission_date, firm_id, currency_code)" in grains[3]
+    assert "(firm_id, explicit period_start/period_end, currency_code)" in grains[4]
     assert "active reconciliation failure" in grains[5]
+
+
+def test_documented_reconciliation_sql_aggregates_invoices_and_keeps_missing_period() -> None:
+    """Run the design sketch against the smallest meaningful finance example."""
+    doc = DESIGN_DOC.read_text()
+    sql = re.findall(r"```sql\n(.*?)```", doc, flags=re.DOTALL)[0]
+    replacements = {
+        "{{ ref('stg_quickbooks_invoices') }}": "stg_quickbooks_invoices",
+        "{{ ref('dim_firm_accounting_mapping') }}": "dim_firm_accounting_mapping",
+        "{{ ref('fct_tracknow_commission_daily') }}": "fct_tracknow_commission_daily",
+        "{{ var('reconciliation_tolerance_amount', 5) }}": "5",
+        "{{ var('reconciliation_tolerance_pct', 0.01) }}": "0.01",
+    }
+    for source, target in replacements.items():
+        sql = sql.replace(source, target)
+
+    connection = duckdb.connect()
+    connection.execute(
+        """
+        create table stg_quickbooks_invoices as
+        select * from (values
+            ('i-1', 'qbo-a', date '2025-01-31', date '2025-01-01', date '2025-01-31', 'GBP', 500.0, 'explicit'),
+            ('i-2', 'qbo-a', date '2025-01-31', date '2025-01-01', date '2025-01-31', 'GBP', 500.0, 'explicit'),
+            ('i-3', 'qbo-a', date '2025-01-31', null, null, 'GBP', 125.0, 'missing_period')
+        ) as t(invoice_id, quickbooks_customer_id, invoice_date, period_start, period_end, currency_code, invoice_total, period_status)
+        """
+    )
+    connection.execute(
+        """
+        create table dim_firm_accounting_mapping as
+        select * from (values ('firm-a', 'qbo-a', date '2025-01-01', cast(null as date)))
+        as t(firm_id, quickbooks_customer_id, valid_from, valid_to)
+        """
+    )
+    connection.execute(
+        """
+        create table fct_tracknow_commission_daily as
+        select * from (values ('firm-a', date '2025-01-15', 'GBP', 1000.0))
+        as t(firm_id, commission_date, currency_code, commission_gbp)
+        """
+    )
+    rows = connection.execute(sql).fetchdf()
+
+    matched = rows[rows["reconciliation_status"] == "matched"].iloc[0]
+    assert matched["quickbooks_invoice_amount"] == 1000.0
+    assert matched["tracknow_commission_amount"] == 1000.0
+    assert matched["invoice_count"] == 2
+    unknown = rows[rows["reconciliation_status"] == "missing_period"].iloc[0]
+    assert unknown["quickbooks_invoice_amount"] == 125.0
+    assert pd.isna(unknown["period_start"])
 
 
 def test_quickbooks_page_maps_customer_to_firm_without_name_join() -> None:

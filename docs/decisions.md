@@ -22,9 +22,9 @@ Key architectural decisions recorded as lightweight ADRs.
 
 ## 3. Sample exact click-ID matching vs. production identity contract
 
-- **Context:** TrackNow orders carry `click_id`; PostHog sessions carry `gclid`, `fbclid`, and `click_id_from_url`. The sample file is an anonymized extract without cross-system identifier overlap.
-- **Decision:** Sample attribution strictly enforces exact `click_id` equality without fuzzy matching. In production, a documented identity contract must capture ad click IDs at landing, persist with PostHog sessions, and propagate into TrackNow (`affiliate_session_id`).
-- **Consequences:** Sample attribution is auditable and deterministic. Unmatched rows are classified by `int_unmatched_conversions`.
+- **Context:** TrackNow orders carry a native `click_id` and `affiliate_session_id`; PostHog sessions carry `gclid`, `fbclid`, and `click_id_from_url`. The sample file is an anonymized extract without cross-system identifier overlap or click-event data. TrackNow generates its own `click_id`, so the PFM cannot assume it may assign that value.
+- **Decision:** Sample attribution strictly enforces exact `click_id` equality without fuzzy matching. Production uses a proposed bridge at one row per observed TrackNow-native `click_id` and PostHog `session_id` correlation, with `tracknow_click_id`, `posthog_session_id`, `posthog_distinct_id`, `observed_at`, and `capture_source`. The bridge must be populated from a supported TrackNow click/export or conversion/postback source plus first-party landing telemetry. The delivered sample cannot implement or validate this contract.
+- **Consequences:** Sample attribution is auditable and deterministic. Unmatched rows are classified by `int_unmatched_conversions`; production correlation remains an explicit integration dependency rather than an invented join.
 
 ---
 
@@ -86,6 +86,6 @@ Key architectural decisions recorded as lightweight ADRs.
 
 ## 11. Separation of reported production gap and sample match rate
 
-- **Context:** The prompt notes an 18% production gap in TrackNow conversions. The anonymized sample yields 0% exact matches due to synthetic identifiers.
+- **Context:** The prompt notes an 18% production gap in TrackNow conversions. The anonymized sample yields 0% exact matches because no exact identifier overlap is present in the delivered extract.
 - **Decision:** The reported 18% production gap (assignment premise) and the sample 0% match rate (local deterministic result) are explicitly presented as separate populations.
-- **Consequences:** Prevents confusing the sample's synthetic properties with production root causes, maintaining analytical integrity.
+- **Consequences:** Prevents confusing the sample's observed coverage with production root causes, maintaining analytical integrity.

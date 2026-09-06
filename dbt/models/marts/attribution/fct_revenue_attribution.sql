@@ -9,7 +9,9 @@
 --   excluded here - that is a revenue decision, not an audit one (the audit
 --   table int_conversion_attribution keeps them). 'refunded' conversions are
 --   KEPT with their status explicit: no business rule was provided to zero or
---   remove commission on refunds, so the mart does not invent one.
+--   remove commission on refunds, so the mart does not invent one. These are
+--   source-reported operational amounts, not confirmed net recognized commission.
+--   Official Sheet daily differences are never allocated to individual orders.
 --
 -- Commission rule:
 --   commission_gbp always comes from stg_tracknow_checkouts.commission_gbp,

@@ -60,26 +60,27 @@ def test_investigation_page_renders_the_four_diagnostic_queries_in_expanders() -
     )
     # Element 2: the four diagnostic queries, each inside its expander with SQL sketch.
     for phrase in [
-        "Query 1 - Daily baseline of the gap",
+        "Query 1 - Dates, status and population",
         "Query 2 - Identifier coverage",
-        "Query 3 - Gap by channel",
-        "Query 4 - Gap by TrackNow-side dimensions",
+        "Query 3 - Exact identifier overlap",
+        "Query 4 - Exact overlap by firm and date",
     ]:
         assert phrase in expander_labels or phrase in body
-    # The sketches really are SQL over the documented production contract.
-    assert "unmatched_rate" in code
-    assert "tracknow.conversions" in code
-    assert "posthog.sessions" in code
+    # The sketches really are SQL over the delivered staging contracts.
+    assert "exact_overlap_rate" in code
+    assert "staging.stg_tracknow_checkouts" in code
+    assert "staging.stg_posthog_sessions" in code
 
 
 def test_investigation_queries_count_and_scope() -> None:
-    """The investigation focuses on four diagnostic queries without hypothetical keys."""
+    """The investigation focuses on four diagnostic queries over local staging."""
     from sections.investigation import INVESTIGATION_QUERIES
 
     assert len(INVESTIGATION_QUERIES) == 4
     for title, purpose, sketch in INVESTIGATION_QUERIES:
-        assert "event_id" not in sketch  # No hypothetical event_id join key
-        assert "tracknow.conversions" in sketch
+        assert "event_id" not in sketch
+        assert "staging.stg_tracknow_checkouts" in sketch
+        assert "attribution.bridge" not in sketch
 
 
 def test_investigation_page_renders_hypotheses_with_tests_and_fixes() -> None:
@@ -87,10 +88,10 @@ def test_investigation_page_renders_hypotheses_with_tests_and_fixes() -> None:
     body = _body(at)
     # Element 3: four hypotheses, each with a test and a fix.
     for phrase in [
-        "Hypothesis 1 - Identifier lost before or at affiliate redirect",
-        "Hypothesis 2 - Cross-session conversion & identity expiration",
-        "Hypothesis 3 - Partner / affiliate platform parameter stripping",
-        "Hypothesis 4 - Client-side collection drop (ad blockers / consent)",
+        "Hypothesis 1 - Population or window mismatch",
+        "Hypothesis 2 - Missing cross-system identifier bridge",
+        "Hypothesis 3 - Parameter loss at redirect or checkout",
+        "Hypothesis 4 - Collection failure or ingestion lag",
         "**Test:**",
         "**Fix:**",
     ]:

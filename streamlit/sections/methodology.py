@@ -58,10 +58,10 @@ METHOD_RULES = (
         "sample implementation constraint: exact click-id equality is the "
         "only relationship provable in the anonymised file. No fuzzy "
         "matching, no normalization of identifier values, and no invented "
-        "bridge: the sample carries no documented identity contract, so an "
+        "bridge: the delivered sample carries no cross-system bridge, so an "
         "`affiliate_session_id` is never ASSUMED to equal a PostHog "
-        "`session_id` here (that is a data limitation, not evidence that "
-        "`affiliate_session_id` is irrelevant in production).",
+        "`session_id` here (that is a sample limitation, not a production "
+        "contract).",
     ),
     (
         "2. Temporal window",
@@ -107,8 +107,9 @@ DECISION_STATES = (
 )
 
 # The production identity flow, stated once as design material. It describes
-# how attribution SHOULD work when the systems are under our control - not
-# what the anonymised sample can demonstrate (ADR 3 / ADR 11).
+# the minimum correlation contract needed when the systems are under control -
+# not what the anonymised sample can demonstrate (ADR 3 / ADR 11). TrackNow's
+# click_id is native to TrackNow; the PFM does not invent or assign it.
 PRODUCTION_IDENTITY_FLOW = """\
 1. Capture ad-click identifier
    Google / Meta ad click → capture `gclid` / `fbclid` on the landing page
@@ -117,19 +118,38 @@ PRODUCTION_IDENTITY_FLOW = """\
    `gclid` / `fbclid` → store in first-party attribution bridge keyed by
    PostHog `distinct_id` + `session_id`
 
-3. Generate / persist attribution identifier
-   Attribution bridge → generate a persistent `attribution_click_id`
-   (first-party, survives session boundaries)
+3. Capture the TrackNow-native click identifier
+   TrackNow generates `click_id` when the affiliate click is registered.
+   Capture that native value through a supported TrackNow click/export or
+   postback source and correlate it to the landing session.
 
-4. Propagate onto affiliate redirect
-   `attribution_click_id` → pass as TrackNow `click_id` on the affiliate URL
+4. Persist the cross-system bridge
+   Store the TrackNow `click_id` alongside the PostHog `session_id` and
+   `distinct_id`; do not assume either platform's session token equals the
+   other.
 
 5. TrackNow closes the loop
-   TrackNow `click_id` → returns the same `click_id` on the conversion
+   TrackNow returns its native `click_id` on the conversion record
 
 6. Conversion resolves the bridge
    `conversion.click_id` → resolves the attribution bridge → resolves the
    PostHog session / `distinct_id`
+"""
+
+# The smallest production contract that makes the flow testable. The sample
+# has neither click events nor a cross-system bridge, so this remains design
+# documentation and no empty relation is created.
+PRODUCTION_BRIDGE_CONTRACT = """\
+Proposed bridge contract (not implemented in the delivered sample)
+Grain: one row per observed TrackNow-native `click_id` and PostHog
+       `session_id` correlation.
+Required fields: `tracknow_click_id`, `posthog_session_id`,
+                 `posthog_distinct_id`, `observed_at`, `capture_source`.
+Expected capture: a supported TrackNow click/export or conversion/postback
+                   source for the native `click_id`, joined to first-party
+                   landing telemetry that records the PostHog session.
+The provided files contain no such click-event bridge, so this contract is
+not materialized and cannot be used to explain the local sample result.
 """
 
 # The role each identifier plays in the production design. The sample cannot
@@ -137,14 +157,16 @@ PRODUCTION_IDENTITY_FLOW = """\
 PRODUCTION_IDENTIFIER_ROLES = (
     (
         "`gclid` / `fbclid`",
-        "Captured on the landing page from the Google / Meta ad click. Must "
-        "be persisted with the PostHog session / `distinct_id` and propagated "
-        "onto the affiliate redirect.",
+        "Captured on the landing page from the Google / Meta ad click and "
+        "persisted with the PostHog session / `distinct_id`. Any correlation "
+        "to a TrackNow-native click is recorded in the bridge rather than "
+        "inferred from the field name.",
     ),
     (
         "`click_id_from_url`",
-        "PostHog's record of the click id read from the landing URL: the "
-        "analytics-side trace of the same identifier flow.",
+        "PostHog's record of a click id read from the landing URL. It is an "
+        "analytics-side candidate and is not assumed equal to TrackNow's "
+        "native `click_id` without a bridge record.",
     ),
     (
         "`distinct_id`",
@@ -158,25 +180,17 @@ PRODUCTION_IDENTIFIER_ROLES = (
         "without a documented contract between the systems.",
     ),
     (
-        "`attribution_click_id`",
-        "The first-party identifier generated from the bridge. Passed to "
-        "TrackNow as the affiliate `click_id`; the deterministic key that "
-        "links a conversion back to the PostHog identity.",
-    ),
-    (
-        "`click_id`",
-        "The TrackNow outbound-click identifier carried by the conversion, "
-        "which is the key that closes the loop. Must equal the `attribution_click_id` "
-        "passed on the affiliate URL.",
+        "`click_id` / `tracknow_click_id`",
+        "The native TrackNow click identifier, generated by TrackNow and "
+        "returned on the conversion. The bridge stores this value exactly; "
+        "the PFM does not generate or assign it.",
     ),
     (
         "`affiliate_session_id`",
-        "Assigned by TrackNow when the affiliate link is clicked; one of the "
-        "keys to attribution in the TrackNow contract, without assuming that it equals "
-        "`PostHog.session_id`. The sample cannot "
-        "relate it to a PostHog session, which is a property of the "
-        "provided anonymised file: production design must document what it "
-        "references rather than discard it.",
+        "A TrackNow-side identifier retained for the bridge and diagnostics. "
+        "It is not joined directly to `PostHog.session_id`; production must "
+        "document the supported correlation source and preserve the native "
+        "`click_id` used by the conversion.",
     ),
     (
         "`utm_content` / `ad_id`",
@@ -568,7 +582,7 @@ def _rationale_section() -> None:
     )
     st.markdown(
         "* **Observations in the data**: PostHog records browsing sessions with session identifiers, distinct IDs, start timestamps, landing URLs, ad identifiers (`gclid`, `fbclid`), and marketing parameters. TrackNow records affiliate checkouts with conversion IDs, conversion dates, order values, commission amounts, outbound click IDs, affiliate session IDs, and user IDs.\n"
-        "* **Viable matching keys**: The primary candidate keys connecting conversions to sessions are the click identifiers: TrackNow `click_id` compared against PostHog ad click IDs (`gclid`, `fbclid`) or URL parameters (`click_id_from_url`).\n"
+        "* **Viable sample matching keys**: The candidate keys available for comparing conversions to sessions are the click identifiers: TrackNow `click_id` compared against PostHog ad click IDs (`gclid`, `fbclid`) or URL parameters (`click_id_from_url`). This comparison does not establish a production namespace contract.\n"
         "* **Relationships that cannot be assumed**: TrackNow `affiliate_session_id` cannot be treated as equal to PostHog `session_id` because each platform generates its own session tokens without a shared contract. Similarly, `tracknow_user_id` cannot be equated to PostHog `distinct_id`. Furthermore, TrackNow supplies only a conversion date without an order timestamp, so intraday session sequence cannot be guessed.\n"
         "* **Why exact matching was chosen**: Exact identifier matching is the only deterministic, auditable standard supported by the data. Approximating keys or fabricating joins would risk misattributing revenue to unrelated marketing channels. When an identifier does not match exactly, leaving the record unmatched is the analytically sound decision.\n"
         "* **Evolution to the dbt architecture**: These findings directly structured our dbt design. Staging models clean and type cast raw records while preserving all rows. Intermediate models isolate candidate keys, apply deterministic exact matching hierarchy with recency tie breaks, and classify unmatched records into an auditable diagnostic taxonomy. Marts publish reconciled reporting for revenue attribution and tracking health."
@@ -597,9 +611,9 @@ def _production_design_section() -> None:
     st.write(
         "The core cross-system attribution challenge is namespace separation. "
         "PostHog tracks user browsing sessions using `distinct_id` and `session_id`. "
-        "TrackNow manages affiliate conversions in a distinct platform, returning an outbound `click_id` upon checkout. "
+        "TrackNow manages affiliate conversions in a distinct platform and generates its native `click_id` when an affiliate click is registered. "
         "Because neither system natively recognizes the other's internal tokens, reliable attribution cannot rely on guesswork. "
-        "Production requires an explicit, persistent first-party identifier that traverses both environments from initial ad click to final purchase."
+        "Production requires an explicit bridge that captures the TrackNow-native identifier and correlates it with the PostHog session."
     )
     st.write(
         "The target architecture establishes a clean, end-to-end attribution loop:"
@@ -609,9 +623,8 @@ def _production_design_section() -> None:
     st.markdown(
         "* **Capture ad-click identifier**: On the landing page, capture inbound ad parameters (`gclid` or `fbclid`).\n"
         "* **Associate with PostHog identity**: Attach the captured ad identifier to the active PostHog `session_id` and user `distinct_id`.\n"
-        "* **Persist attribution key**: Store a persistent `attribution_click_id` in a first-party bridge table that survives session restarts.\n"
-        "* **Pass to TrackNow**: Forward this `attribution_click_id` as the TrackNow `click_id` query parameter on outbound affiliate links.\n"
-        "* **TrackNow records conversion**: When a purchase completes, TrackNow returns that exact `click_id` in the conversion record.\n"
+        "* **Capture the TrackNow key**: Record TrackNow's native `click_id` from a supported TrackNow source and correlate it to the landing session.\n"
+        "* **Persist the bridge**: Store the native `click_id`, PostHog `session_id`/`distinct_id`, capture time, and source at the proposed bridge grain.\n"
         "* **Resolve the bridge**: The conversion `click_id` looks up the bridge table and deterministically resolves the original PostHog session and user."
     )
     st.write("Identifier roles across the systems:")
@@ -620,15 +633,17 @@ def _production_design_section() -> None:
     st.write(
         "This architecture establishes two key constraints. First, `gclid` "
         "and `fbclid` captured on landing must persist alongside the PostHog "
-        "`distinct_id` and session, then forward onto the affiliate outbound "
-        "click so `attribution_click_id` closes the loop upon conversion. "
-        "Second, `affiliate_session_id` is one of the keys to attribution in "
-        "the TrackNow contract, without assuming that it equals "
-        "`PostHog.session_id`. Its exact relationship must be explicitly "
-        "documented by the integration team rather than assumed in SQL. "
-        "Finally, `utm_content` is preserved for ad-level creative reporting "
+        "`distinct_id` and session. The bridge records the native TrackNow "
+        "`click_id` from a supported source; the PFM does not generate or "
+        "assign that value. Second, `affiliate_session_id` is retained for "
+        "diagnostics without assuming that it equals `PostHog.session_id`. "
+        "Its exact relationship must be explicitly documented by the integration "
+        "team rather than assumed in SQL. Finally, `utm_content` is preserved "
+        "for ad-level creative reporting "
         "(exposed as `ad_id` in `marts.fct_revenue_attribution`), never as a join key between tables."
     )
+    st.write("Minimum bridge contract:")
+    st.code(PRODUCTION_BRIDGE_CONTRACT, language=None)
     st.write(
         "Production investigations and root cause diagnostics for the reported 18% gap are detailed on the Investigation & monitoring page."
     )

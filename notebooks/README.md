@@ -16,9 +16,9 @@ jupyter notebook notebooks/01_data_exploration.ipynb
 ```
 
 The notebook reads the bundled sample workbook with Polars
-(`pl.read_excel(...)`, `sheet_id=0` returns all sheets). Note that it currently
-points at an absolute path for `data/source.xlsx`; adjust `SOURCE_PATH` to your
-checkout location if you move it.
+(`pl.read_excel(...)`, `sheet_id=0` returns all sheets). Its source path is
+relative to the checkout, whether Jupyter starts from the repository root or
+`notebooks/`.
 
 ## What the exploration found
 
@@ -29,8 +29,8 @@ checkout location if you move it.
 - TrackNow carries **only** `click_id` among the considered match identifiers;
   `gclid` and `fbclid` exist solely on the PostHog side, plus
   `click_id_from_url`.
-- Identifier coverage is partial on both sides; `click_id` is the only shared
-  identifier namespace.
+- Identifier coverage is partial on both sides. Comparing the available click
+  fields tests a candidate relationship; it does not establish a shared namespace.
 
 ### Matching potential
 
@@ -40,9 +40,9 @@ checkout location if you move it.
 - Headline exact-match and fan-out metrics are computed on a deduplicated
   `(tracknow_order_id, session_id)` grain because one PostHog row can expose
   the same logical identifier through more than one column.
-- Both fan-out directions are reported separately: one order matching multiple
-  sessions, and one session/identifier matching multiple orders. Both exist in
-  the sample, so the attribution layer must disambiguate deterministically.
+- There are zero exact cross-system matches in this sample, so neither
+  direction of match fan-out is observed. Multiple candidate sessions are
+  covered by synthetic dbt tests; several orders may legitimately share a session.
 
 ### Temporal coverage
 
@@ -63,7 +63,7 @@ Two unmatched segments are profiled (presence of `click_id`, `status`,
 
 The EDA hypotheses became explicit pipeline decisions:
 
-- `click_id` is the primary matching key (the only shared identifier).
+- `click_id` equality is evaluated as a diagnostic, not a proven shared key.
 - Each PostHog identifier type (`gclid`, `fbclid`, `click_id_from_url`) is
   evaluated separately, and conversions missing `click_id` are classified
   separately (they cannot be exact-matched; tracked as

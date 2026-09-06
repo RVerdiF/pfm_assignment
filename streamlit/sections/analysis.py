@@ -107,7 +107,8 @@ def _render_overview(connection) -> None:
     st.subheader("Attribution overview")
     st.caption(
         "Source: valid conversions in marts.fct_revenue_attribution (denied "
-        "orders excluded from revenue; refunded orders retained). The total "
+        "orders excluded from revenue; refunded orders retained at their source "
+        "amount, not necessarily net recognized commission). The total "
         "decided population, including denied rows, reconciles in the audit "
         "metrics below and in the health mart table."
     )

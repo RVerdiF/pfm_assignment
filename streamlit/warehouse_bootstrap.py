@@ -3,7 +3,7 @@
 The app must start even when ``warehouse/pfm.duckdb`` does not exist yet (for
 example on a fresh hosting environment). This module centralizes that
 decision: when the warehouse file is missing or the required dbt relations are
-absent, it runs the canonical pipeline first -
+absent or lack required columns, it runs the canonical pipeline first -
 
     python ingestion/load_excel.py
     dbt build
@@ -57,13 +57,23 @@ EXPECTED_INTERMEDIATE_VIEWS = (
     "int_unmatched_conversions",
 )
 
-# Every relation the walkthrough pages read, as (schema, table) pairs. Startup
-# verifies this full contract before any page renders.
-REQUIRED_RELATIONS: tuple[tuple[str, str], ...] = tuple(
-    (MART_SCHEMA, mart) for mart in EXPECTED_MARTS
-) + tuple(
-    (INTERMEDIATE_SCHEMA, view) for view in EXPECTED_INTERMEDIATE_VIEWS
-)
+# Only columns queried by the walkthrough are required. This detects an older
+# materialization (e.g. a revenue mart without channel) without a schema version
+# system or rebuilding an already compatible warehouse.
+REQUIRED_COLUMNS = {
+    (MART_SCHEMA, "fct_revenue_attribution"): {
+        "commission_gbp", "match_status", "channel", "match_method",
+    },
+    (MART_SCHEMA, "fct_commission_daily_local"): {
+        "conversion_date", "conversion_count", "commission_gbp",
+    },
+    (MART_SCHEMA, "mart_attribution_health"): {
+        "conversion_date", "total_conversions", "matched_conversions",
+        "unmatched_conversions", "ambiguous_conversions",
+    },
+    (INTERMEDIATE_SCHEMA, "int_unmatched_conversions"): {"unmatched_reason"},
+}
+REQUIRED_RELATIONS = tuple(REQUIRED_COLUMNS)
 
 
 class PipelineError(RuntimeError):
@@ -194,10 +204,10 @@ def run_dbt_build(project_root: str | Path | None = None) -> None:
     )
 
 
-def _relation_exists(
+def _relation_is_compatible(
     database_path: str | Path, schema: str, table: str
 ) -> bool:
-    """Return whether a relation exists in the local DuckDB warehouse."""
+    """Return whether the relation provides the columns its consumers query."""
     db_path = Path(database_path)
     if not db_path.is_file():
         return False
@@ -206,12 +216,15 @@ def _relation_exists(
     except duckdb.Error:
         return False
     try:
-        row = con.execute(
-            "select count(*) from information_schema.tables "
-            "where table_schema = ? and table_name = ?",
-            [schema, table],
-        ).fetchone()
-        return bool(row and row[0] > 0)
+        columns = {
+            row[0]
+            for row in con.execute(
+                "select column_name from information_schema.columns "
+                "where table_schema = ? and table_name = ?",
+                [schema, table],
+            ).fetchall()
+        }
+        return bool(columns) and REQUIRED_COLUMNS[(schema, table)] <= columns
     except duckdb.Error:
         return False
     finally:
@@ -219,7 +232,7 @@ def _relation_exists(
 
 
 def required_relations_present(database_path: str | Path | None = None) -> bool:
-    """Check that every relation the analytics UI reads is materialized.
+    """Check that every relation exposes the columns queried by the analytics UI.
 
     The contract is the consumer marts plus the narrow
     ``intermediate.int_unmatched_conversions`` diagnostic view (ADR 8): both
@@ -228,7 +241,7 @@ def required_relations_present(database_path: str | Path | None = None) -> bool:
     """
     db_path = _database_path_or_default(database_path)
     return all(
-        _relation_exists(db_path, schema, table)
+        _relation_is_compatible(db_path, schema, table)
         for schema, table in REQUIRED_RELATIONS
     )
 
@@ -252,7 +265,7 @@ def _missing_relations(database_path: str | Path | None = None) -> list[str]:
     return [
         f"{schema}.{table}"
         for schema, table in REQUIRED_RELATIONS
-        if not _relation_exists(db_path, schema, table)
+        if not _relation_is_compatible(db_path, schema, table)
     ]
 
 
@@ -273,7 +286,7 @@ def _check_target_within_project(db_path: Path) -> None:
         detail = ""
         if missing:
             detail = (
-                " The warehouse is missing required relation(s): "
+                " The warehouse has missing relations or required columns in: "
                 + ", ".join(missing)
                 + "."
             )
@@ -310,8 +323,8 @@ def get_warehouse_connection(
     missing = _missing_relations(db_path)
     if missing:
         raise PipelineError(
-            "The warehouse exists but the required relations are missing: "
-            f"{', '.join(missing)}. The pipeline finished without creating "
+            "The warehouse has missing relations or required columns in: "
+            f"{', '.join(missing)}. The pipeline finished without providing "
             "them; inspect the dbt build output above."
         )
 

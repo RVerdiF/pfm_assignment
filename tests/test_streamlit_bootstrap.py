@@ -83,7 +83,8 @@ def test_required_relations_present_after_full_population(tmp_path: Path) -> Non
     con.execute("create schema marts")
     con.execute("create schema intermediate")
     for schema, table in wb.REQUIRED_RELATIONS:
-        con.execute(f'create table "{schema}"."{table}" (x int)')
+        columns = ", ".join(f'"{name}" int' for name in wb.REQUIRED_COLUMNS[(schema, table)])
+        con.execute(f'create table "{schema}"."{table}" ({columns})')
     con.close()
 
     assert wb.required_relations_present(db_path) is True
@@ -101,9 +102,10 @@ def test_required_relations_present_false_when_one_mart_missing(
     for mart in wb.EXPECTED_MARTS:
         if mart == "mart_attribution_health":
             continue
-        con.execute(f'create table marts."{mart}" (x int)')
+        columns = ", ".join(f'"{name}" int' for name in wb.REQUIRED_COLUMNS[("marts", mart)])
+        con.execute(f'create table marts."{mart}" ({columns})')
     con.execute(
-        "create table intermediate.int_unmatched_conversions (x int)"
+        "create table intermediate.int_unmatched_conversions (unmatched_reason varchar)"
     )
     con.close()
 
@@ -128,7 +130,8 @@ def test_required_relations_present_false_when_diagnostic_view_missing(
     con.execute("create schema marts")
     con.execute("create schema intermediate")
     for mart in wb.EXPECTED_MARTS:
-        con.execute(f'create table marts."{mart}" (x int)')
+        columns = ", ".join(f'"{name}" int' for name in wb.REQUIRED_COLUMNS[("marts", mart)])
+        con.execute(f'create table marts."{mart}" ({columns})')
     con.close()
 
     assert (db_path).is_file()
@@ -154,7 +157,8 @@ def test_get_warehouse_connection_raises_readable_error_when_diagnostic_view_mis
     con.execute("create schema marts")
     con.execute("create schema intermediate")
     for mart in wb.EXPECTED_MARTS:
-        con.execute(f'create table marts."{mart}" (x int)')
+        columns = ", ".join(f'"{name}" int' for name in wb.REQUIRED_COLUMNS[("marts", mart)])
+        con.execute(f'create table marts."{mart}" ({columns})')
     con.close()
 
     monkeypatch.setenv("PFM_DUCKDB_PATH", str(custom))
@@ -178,7 +182,8 @@ def test_check_target_rejects_custom_missing_diagnostic_view(
     con.execute("create schema marts")
     con.execute("create schema intermediate")
     for mart in wb.EXPECTED_MARTS:
-        con.execute(f'create table marts."{mart}" (x int)')
+        columns = ", ".join(f'"{name}" int' for name in wb.REQUIRED_COLUMNS[("marts", mart)])
+        con.execute(f'create table marts."{mart}" ({columns})')
     con.close()
 
     monkeypatch.setenv("PFM_DUCKDB_PATH", str(temp_database))
@@ -186,10 +191,10 @@ def test_check_target_rejects_custom_missing_diagnostic_view(
         wb._check_target_within_project(temp_database)
 
 
-def test_relation_exists_false_on_broken_file(tmp_path: Path) -> None:
+def test_relation_is_compatible_false_on_broken_file(tmp_path: Path) -> None:
     db_path = tmp_path / "broken.duckdb"
     db_path.write_bytes(b"this is not a duckdb database file")
-    assert wb._relation_exists(db_path, "marts", "fct_revenue_attribution") is False
+    assert wb._relation_is_compatible(db_path, "marts", "fct_revenue_attribution") is False
 
 
 def test_check_target_rejects_custom_missing_path(
@@ -214,3 +219,23 @@ def test_check_target_accepts_default_when_env_set_to_default(
     # still the managed target and must not be rejected.
     monkeypatch.setenv("PFM_DUCKDB_PATH", str(wb.DEFAULT_DATABASE_PATH))
     wb._check_target_within_project(wb.DEFAULT_DATABASE_PATH)
+
+
+def test_existing_mart_without_channel_is_rejected_before_render(tmp_path: Path) -> None:
+    db_path = tmp_path / "old.duckdb"
+    with duckdb.connect(str(db_path)) as con:
+        con.execute("create schema marts")
+        con.execute("create schema intermediate")
+        for (schema, table), required in wb.REQUIRED_COLUMNS.items():
+            columns = ", ".join(f'"{name}" int' for name in required)
+            con.execute(f'create table "{schema}"."{table}" ({columns})')
+        con.execute("alter table marts.fct_revenue_attribution drop column channel")
+
+    assert wb.warehouse_needs_build(db_path)
+    assert wb._missing_relations(db_path) == ["marts.fct_revenue_attribution"]
+    wb.get_warehouse_connection.clear()
+    try:
+        with pytest.raises(wb.PipelineError, match="required columns.*fct_revenue_attribution"):
+            wb.get_warehouse_connection(database_path=db_path)
+    finally:
+        wb.get_warehouse_connection.clear()

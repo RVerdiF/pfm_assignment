@@ -10,7 +10,7 @@
 -- the TrackNow click_id and a PostHog click identifier value (gclid, fbclid,
 -- or click_id_from_url) emitted by int_posthog_attribution_candidates, because
 -- no documented cross-system bridge is available in the delivered data. This
--- is the only relationship provable in the anonymised sample; production
+-- tests a candidate relationship, not a proven shared namespace; production
 -- attribution would use an explicit identity contract instead (identifier
 -- capture at the landing, persistence with the PostHog session/distinct_id,
 -- propagation onto the affiliate outbound click, and the TrackNow contract
