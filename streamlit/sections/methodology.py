@@ -243,13 +243,13 @@ EDGE_CASES = (
 DBT_ARCHITECTURE_TABLE = (
     (
         "stg_tracknow_checkouts",
-        "Staging",
+        "Staging (Implemented / Sample)",
         "One row per TrackNow conversion (conversion_id)",
         "Reads raw.tracknow_checkouts; casts types (conversion_date to DATE, order_price_gbp and commission_gbp to DOUBLE); trims whitespace on string identifiers (empty becomes NULL); maps referral_bonus_gbp to commission_gbp; derives is_valid_conversion (status <> 'denied') under SQL three-valued logic while preserving denied orders for audit.",
     ),
     (
         "stg_posthog_sessions",
-        "Staging",
+        "Staging (Implemented / Sample)",
         "One row per PostHog browsing session (session_id)",
         "Reads raw.posthog_sessions; trims identifiers and marketing params with empty strings becoming NULL (schema tests enforce not_null and unique on session_id); casts session_start_at to TIMESTAMPTZ and session_date to DATE; trims UTM parameters with case preserved; preserves click identifiers (click_id_from_url, gclid, fbclid).",
     ),
@@ -261,25 +261,25 @@ DBT_ARCHITECTURE_TABLE = (
     ),
     (
         "int_tracknow_attribution_candidates",
-        "Intermediate",
+        "Intermediate (Implemented / Sample)",
         "One row per TrackNow conversion (conversion_id)",
         "Projects candidate conversion identifiers (click_id, conversion_date, affiliate_session_id, tracknow_user_id) without deciding attribution; computes boolean presence flags (has_click_id, has_affiliate_session_id, has_tracknow_user_id) to monitor tracking coverage.",
     ),
     (
         "int_posthog_attribution_candidates",
-        "Intermediate",
+        "Intermediate (Implemented / Sample)",
         "One row per candidate click identifier (session_id, identifier_type, identifier_value)",
         "Unpivots existing non-null PostHog session click identifiers (UNION ALL across gclid, fbclid, and click_id_from_url) into (session_id, identifier_type, identifier_value); filters out sessions without click identifiers; does not apply matching or priority ordering (ranking is deferred to int_conversion_attribution).",
     ),
     (
         "int_conversion_attribution",
-        "Intermediate",
+        "Intermediate (Implemented / Sample)",
         "One row per TrackNow conversion (conversion_id)",
         "Core deterministic attribution engine (table); joins candidate sessions and applies 4-step hierarchy: 1. Exact click identifier match, 2. Temporal eligibility window (session_date <= conversion_date), 3. Identifier priority (typed gclid/fbclid rank 0 over generic click_id_from_url rank 1), 4. Recency tie-break (latest session_start_at wins); classifies into matched, ambiguous, or unmatched; attaches session attributes.",
     ),
     (
         "int_unmatched_conversions",
-        "Intermediate",
+        "Intermediate (Implemented / Sample)",
         "One row per non-matched TrackNow conversion (conversion_id)",
         "Diagnostic taxonomy view (ADR 8) projecting non-matched rows from int_conversion_attribution; classifies each into deterministic root-cause reasons (missing_click_id, outside_posthog_sample_window, multiple_candidates, click_id_not_found, unknown); preserves 1:1 row parity for auditable health telemetry.",
     ),
@@ -291,13 +291,13 @@ DBT_ARCHITECTURE_TABLE = (
     ),
     (
         "fct_revenue_attribution",
-        "Marts",
+        "Marts (Implemented / Sample)",
         "One row per valid conversion (conversion_id)",
         "Filters int_conversion_attribution to valid conversions (is_valid_conversion = true; excludes denied orders, retains refunded orders); joins attributed session marketing channels (utm_source, utm_medium, utm_campaign, utm_content); exposes commission_gbp (= referral_bonus_gbp) and match metadata.",
     ),
     (
         "mart_attribution_health",
-        "Marts",
+        "Marts (Implemented / Sample)",
         "One row per (conversion_date, utm_source)",
         "Aggregates across the entire decided conversion population (including denied orders); calculates volume metrics (total_conversions, matched_conversions, unmatched_conversions, ambiguous_conversions), conversion rates (match_rate, unmatched_rate), and exact match counts by identifier type (gclid, fbclid, url_click).",
     ),
@@ -575,6 +575,23 @@ def _rationale_section() -> None:
     )
 
 
+def _decision_lifecycle_section() -> None:
+    st.subheader("Decision flow and attribution lifecycle")
+    st.write(
+        "To evaluate attribution deterministically, the pipeline executes a complete eight stage decision sequence:"
+    )
+    st.markdown(
+        "1. **Source data**: Raw tables (`raw.posthog_sessions` and `raw.tracknow_checkouts`) ingest session events and affiliate purchases, cleaned into staging models with whitespace trimmed and types normalized without dropping rows.\n"
+        "2. **Candidate identifiers**: Intermediate models unpivot candidate session identifiers (`gclid`, `fbclid`, `click_id_from_url`) and extract conversion click parameters (`click_id`, `affiliate_session_id`, `tracknow_user_id`).\n"
+        "3. **Exact match**: The attribution engine joins candidates strictly where TrackNow `click_id` equals a PostHog click identifier value.\n"
+        "4. **Temporal eligibility**: Matches are filtered to sessions dated on or before the conversion date (`session_date <= conversion_date`), preventing future sessions from claiming historical orders.\n"
+        "5. **Priority and tie break**: When multiple eligible sessions match, typed ad identifiers (`gclid`/`fbclid`) take priority over generic URL parameters. Ties are resolved by selecting the latest session start timestamp.\n"
+        "6. **Matched, ambiguous, or unmatched**: Each conversion resolves to exactly one deterministic state: `matched` (single winning session), `ambiguous` (unresolvable tie), or `unmatched` (no eligible session, projected into an auditable diagnostic view).\n"
+        "7. **Marts**: Downstream marts publish consumption-ready reporting: `fct_revenue_attribution` for attributed marketing channel revenue and `mart_attribution_health` for overall tracking quality telemetry.\n"
+        "8. **Monitoring and reconciliation**: Daily commission figures and tracking discrepancies reconcile against finance sources (implemented locally via proxy mart, designed for production via Google Sheets reconciliation and QuickBooks invoice auditing)."
+    )
+
+
 def _production_design_section() -> None:
     st.subheader("Production attribution design")
     st.write(
@@ -625,36 +642,6 @@ def _production_design_section() -> None:
         st.markdown(f"* **{case}.** When: {when}. Handling: {handling}")
 
 
-def _dbt_architecture_section() -> None:
-    st.subheader("dbt transformation architecture")
-    st.write(
-        "The complete dbt transformation contract organizes models across "
-        "three layers: **Staging** (source cleaning and interface stability), "
-        "**Intermediate** (candidate preparation, deterministic attribution, "
-        "unmatched diagnostics, and commission reconciliation), and **Marts** "
-        "(consumer-facing reporting, financial aggregates, and operational "
-        "telemetry). The table below documents every model across both the "
-        "executable local sample and the planned production Google Sheet "
-        "commission pipeline, including each model's explicit grain and key "
-        "transformations:"
-    )
-    st.info(
-        "Production assumption note: The daily commission Google Sheet was not provided in the assignment assets. "
-        "The models `stg_commission_daily`, `int_tracknow_commission_reconciliation`, and `analytics_core.f_commission_daily` "
-        "are architectural proposals based on the assignment prompt rather than pipelines validated against real files. "
-        "Their schemas, primary keys, reconciliation logic, and data quality tests represent our production design. "
-        "Locally, `fct_commission_daily_local` acts as an executable proxy mart built from the sample."
-    )
-    st.table(
-        {
-            "Model": [row[0] for row in DBT_ARCHITECTURE_TABLE],
-            "Layer": [row[1] for row in DBT_ARCHITECTURE_TABLE],
-            "Grain": [row[2] for row in DBT_ARCHITECTURE_TABLE],
-            "Key Transformations": [row[3] for row in DBT_ARCHITECTURE_TABLE],
-        }
-    )
-
-
 def _method_section() -> None:
     st.subheader("Sample implementation")
     st.write(
@@ -667,6 +654,32 @@ def _method_section() -> None:
     st.markdown("**Outcome**: every conversion gets one of three states:")
     for state, meaning in DECISION_STATES:
         st.markdown(f"* **`{state}`**: {meaning}")
+
+
+def _dbt_architecture_section() -> None:
+    st.subheader("dbt transformation architecture")
+    st.write(
+        "With the decision logic and lifecycle defined above, the dbt transformation "
+        "catalog serves as the technical reference for model implementation. Models are "
+        "organized across Staging (source cleaning and interface stability), "
+        "Intermediate (candidate preparation, deterministic attribution, "
+        "unmatched diagnostics, and commission reconciliation), and Marts "
+        "(consumer-facing reporting, financial aggregates, and operational telemetry)."
+    )
+    st.markdown(
+        "**Implementation status labels:**\n\n"
+        "* **Implemented / Sample**: fully implemented in dbt and executed against the delivered sample data.\n"
+        "* **Sample Proxy**: local proxy mart created from sample data to emulate an external production source that was not provided.\n"
+        "* **Production Assumption**: target production architecture, schema, join keys, and data quality tests designed from prompt requirements, not validated against live production files."
+    )
+    st.table(
+        {
+            "Model": [row[0] for row in DBT_ARCHITECTURE_TABLE],
+            "Layer": [row[1] for row in DBT_ARCHITECTURE_TABLE],
+            "Grain": [row[2] for row in DBT_ARCHITECTURE_TABLE],
+            "Key Transformations": [row[3] for row in DBT_ARCHITECTURE_TABLE],
+        }
+    )
 
 
 def _results_section(facts: dict[str, int | float]) -> None:
@@ -764,9 +777,10 @@ def render() -> None:
     facts = _read_narrative_facts(connection)
 
     _rationale_section()
+    _decision_lifecycle_section()
     _production_design_section()
-    _dbt_architecture_section()
     _method_section()
+    _dbt_architecture_section()
     _results_section(facts)
     _limitations_section(connection)
     _recommendations_section(facts)
