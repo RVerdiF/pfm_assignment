@@ -128,7 +128,7 @@ STATUS_RULES = (
     ),
     (
         "missing_quickbooks",
-        "Commission period with no covering invoice (inverse-direction rows in the same model).",
+        "Reserved for an upstream commission source supplying an explicit billing period with no covering invoice; daily TrackNow rows without an explicit invoice period produce `missing_period`.",
     ),
     (
         "matched",

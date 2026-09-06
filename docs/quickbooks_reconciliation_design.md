@@ -5,12 +5,13 @@ QuickBooks invoices would be reconciled against TrackNow commission daily.
 This document is a **design only**: no QuickBooks connection, Airbyte
 workspace, BigQuery dataset, or dbt model from it is implemented in this
 repository, and no figures in it are real data. The only executable part of
-this repo stays the local DuckDB sample pipeline. The TrackNow side of this
-design has two deliberately different inputs: an operational daily
-commission aggregate and the authoritative daily commission published by the
-Google Sheet. The local proxy here is
-`marts.fct_commission_daily_local` (grain `conversion_date, firm_id`); it is
-not the missing authoritative Google Sheet.
+this repo stays the local DuckDB sample pipeline. This reconciliation
+specifically compares QuickBooks invoices against operational TrackNow daily
+commission (`fct_tracknow_commission_daily`, represented locally by the
+sample proxy `marts.fct_commission_daily_local`). The authoritative daily
+commission published by the Google Sheet is an independent financial source
+used for official daily reporting and reconciled separately upstream; it is
+not an input to this invoice reconciliation pipeline.
 
 ## 1. Goal
 
