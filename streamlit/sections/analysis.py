@@ -249,6 +249,15 @@ def _render_unmatched_diagnosis(connection) -> None:
                 "proven deterministically."
             )
 
+    st.markdown(
+        "**Diagnostic category glossary:**\n\n"
+        "* `missing_click_id`: The conversion record arrived without a click identifier, making attribution impossible under exact matching.\n"
+        "* `click_id_not_found`: The conversion carries a click identifier, but that identifier never appears in the recorded PostHog sessions.\n"
+        "* `outside_posthog_sample_window`: The conversion occurred before the recorded session window began, or matching sessions only appeared after the conversion date.\n"
+        "* `multiple_candidates`: More than one eligible session tied with identical priority and timestamp recency, creating an ambiguous match.\n"
+        "* `unknown`: Residual records where session timestamps were missing, preventing chronological validation."
+    )
+
     chart_columns = st.columns([2, 1])
     with chart_columns[0]:
         st.bar_chart(
